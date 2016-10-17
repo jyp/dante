@@ -710,7 +710,7 @@ instead of using `eldoc-documentation-function'."
          (eldoc-message msg))))
 
 (defun eldoc-dante ()
-  "ELDoc backend for dante."
+  "ElDoc backend for dante."
   (apply #'dante-get-type-at-async
          (lambda (beg end ty)
            (let ((response-status (dante-haskell-utils-repl-response-error-status ty)))
@@ -1321,6 +1321,7 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
                       (message "Booting up dante ...")
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
+      (process-send-string process ":set +c\n")
       (process-send-string process ":set -fobject-code\n")
       (process-send-string process ":set prompt \"\\4\"\n")
       (with-current-buffer buffer
