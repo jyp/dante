@@ -911,7 +911,7 @@ If PROMPT-OPTIONS is non-nil, prompt with an options list."
   (setq dante-targets targets)
   (when prompt-options
     (dante-repl-options backend-buffer))
-  (let ((arguments (dante-make-options-list
+  (let ((arguments (dante-make-options-list ;; FIXME
                     (or targets
                         (let ((package-name (buffer-local-value 'dante-package-name
                                                                 backend-buffer)))
@@ -929,9 +929,8 @@ If PROMPT-OPTIONS is non-nil, prompt with an options list."
 ")
                     (basic-save-buffer)
                     (dante-buffer-file-name))))
-      (let ((process (get-buffer-process (apply #'make-comint-in-buffer "dante" (current-buffer) "stack" nil "ghci"
+      (let ((process (get-buffer-process (apply #'make-comint-in-buffer "dante" (current-buffer) "FIXME" nil "ghci"
                                                 (append arguments
-                                                        (list "--verbosity" "silent")
                                                         (list "--ghci-options"
                                                               (concat "-ghci-script=" script)))))))
         (when (process-live-p process)
@@ -1313,11 +1312,14 @@ If provided, use the specified TARGETS and SOURCE-BUFFER."
 Automatically performs initial actions in SOURCE-BUFFER, if specified."
   (if (buffer-local-value 'dante-give-up buffer)
       buffer
-    (let* ((process (with-current-buffer buffer
+    (let* ((args '("cabal" "repl")
+            ;; (list "nix-shell" "--run" (combine-and-quote-strings '("cabal" "repl") )) FIXME
+            )
+           (process (with-current-buffer buffer
                       (when dante-debug
-                        (message "Dante arguments: %s" (combine-and-quote-strings arguments)))
+                        (message "Dante command line: %s" (combine-and-quote-strings args)))
                       (message "Booting up dante ...")
-                      (funcall #'start-process "dante" buffer "nix-shell" "--run" (combine-and-quote-strings "cabal" "repl" )))))
+                      (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (process-send-string process ":set -fobject-code\n")
       (process-send-string process ":set prompt \"\\4\"\n")
@@ -1325,7 +1327,6 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
         (erase-buffer)
         (setq dante-targets targets)
         (setq dante-source-buffer source-buffer)
-        (setq dante-arguments arguments)
         (setq dante-starting t)
         (setq dante-callbacks
               (list (list (cons source-buffer
