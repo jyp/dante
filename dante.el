@@ -36,11 +36,8 @@
 ;; * Go to definition
 ;; * Type of selection
 ;; * Info
-;; * REPL
+;; TODO
 ;; * Find uses
-;; * Import management
-;; * Company mode completion
-;; * Apply suggestions (extensions, imports, etc.)
 
 ;;; Code:
 
@@ -62,39 +59,17 @@
   "Complete development mode for Haskell"
   :group 'haskell)
 
-(defcustom dante-package-version
-  "0.1.18"
-  "Package version to auto-install.
-
-This version does not necessarily have to be the latest version
-of dante published on Hackage.  Sometimes there are changes to
-Dante which have no use for the Emacs mode.  It is only bumped
-when the Emacs mode actually requires newer features from the
-dante executable, otherwise we force our users to upgrade
-pointlessly."
-  :group 'dante
-  :type 'string)
-
-(defcustom dante-repl-no-load
-  t
-  "Pass --no-load when starting the repl.
-This causes it to skip loading the files from the selected target."
-  :group 'dante
-  :type 'boolean)
-(make-variable-buffer-local 'dante-repl-no-load)
-
-(defcustom dante-repl-no-build
-  t
-  "Pass --no-build when starting the repl.
-This causes it to skip building the target."
-  :group 'dante
-  :type 'boolean)
-(make-variable-buffer-local 'dante-repl-no-build)
-
 (defcustom dante-debug nil
   "Show debug output."
   :group 'dante
   :type 'boolean)
+
+(defcustom dante-nix nil
+  "Run commands in a nix-shell."
+  :group 'dante
+  :type 'boolean)
+(make-local-variable 'dante-nix)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Modes
@@ -139,11 +114,11 @@ This causes it to skip building the target."
 
 (defun global-dante-mode (active)
   "Enable Dante on all Haskell mode buffers."
-  (interactive)
+  (interactive "p")
   (setq dante-global-mode (cl-case active
-                            (0 nil)
+                            (nil (not dante-global-mode))
                             (1 t)
-                            (t (not dante-global-mode))))
+                            (t nil)))
   (if dante-global-mode
       (add-hook 'haskell-mode-hook 'dante-mode)
     (remove-hook 'haskell-mode-hook 'dante-mode))
@@ -211,7 +186,6 @@ This is slower, but will build required dependencies.")
 
 (defun dante-list-buffers ()
   "List hidden process buffers created by dante.
-
 You can use this to kill them or look inside."
   (interactive)
   (let ((buffers (cl-remove-if-not
@@ -224,14 +198,6 @@ You can use this to kill them or look inside."
           nil
           buffers))
       (error "There are no Dante process buffers"))))
-
-(defun dante-cd ()
-  "Change directory in the backend process."
-  (interactive)
-  (dante-async-call
-   'backend
-   (concat ":cd "
-           (read-directory-name "Change Dante directory: "))))
 
 (defun dante-fontify-expression (expression)
   "Return a haskell-fontified version of EXPRESSION."
@@ -909,16 +875,12 @@ BACKEND-BUFFER is used for options.
 TARGETS is the targets to load.
 If PROMPT-OPTIONS is non-nil, prompt with an options list."
   (setq dante-targets targets)
-  (when prompt-options
-    (dante-repl-options backend-buffer))
   (let ((arguments (dante-make-options-list ;; FIXME
                     (or targets
                         (let ((package-name (buffer-local-value 'dante-package-name
                                                                 backend-buffer)))
                           (unless (equal "" package-name)
-                            (list package-name))))
-                    (buffer-local-value 'dante-repl-no-build backend-buffer)
-                    (buffer-local-value 'dante-repl-no-load backend-buffer))))
+                            (list package-name)))))))
     (insert (propertize
              (format "Starting:\n  stack ghci %s\n" (combine-and-quote-strings arguments))
              'face 'font-lock-comment-face))
@@ -936,24 +898,6 @@ If PROMPT-OPTIONS is non-nil, prompt with an options list."
         (when (process-live-p process)
           (set-process-query-on-exit-flag process nil)
           (message "Started Dante process for REPL."))))))
-
-(defun dante-repl-options (backend-buffer)
-  "Open an option menu to set options used when starting the REPL.
-Default options come from user customization and any temporary
-changes in the BACKEND-BUFFER."
-  (interactive)
-  (let* ((old-options
-          (list
-           (list :key "load-all"
-                 :title "Load all modules"
-                 :default (not (buffer-local-value 'dante-repl-no-load backend-buffer)))
-           (list :key "build-first"
-                 :title "Build project first"
-                 :default (not (buffer-local-value 'dante-repl-no-build backend-buffer)))))
-         (new-options (dante-multiswitch "Start REPL with options:" old-options)))
-    (with-current-buffer backend-buffer
-      (setq dante-repl-no-load (not (member "load-all" new-options)))
-      (setq dante-repl-no-build (not (member "build-first" new-options))))))
 
 (font-lock-add-keywords
  'dante-repl-mode
@@ -1086,10 +1030,6 @@ x:\\foo\\bar (i.e., Windows)."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Query/commands
-
-(defun dante-get-all-types ()
-  "Get all types in all expressions in all modules."
-  (dante-blocking-call 'backend ":all-types"))
 
 (defun dante-get-type-at (beg end)
   "Get the type at the given region denoted by BEG and END."
@@ -1307,14 +1247,17 @@ If provided, use the specified TARGETS and SOURCE-BUFFER."
         buffer
       (dante-start-process-in-buffer buffer targets source-buffer))))
 
+(defun dante-command-line (cmd)
+  (if dante-nix
+      (list "nix-shell" "--run" (combine-and-quote-strings cmd))
+    cmd))
+
 (defun dante-start-process-in-buffer (buffer &optional targets source-buffer)
   "Start a Dante worker in BUFFER, for the default or specified TARGETS.
 Automatically performs initial actions in SOURCE-BUFFER, if specified."
   (if (buffer-local-value 'dante-give-up buffer)
       buffer
-    (let* ((args '("cabal" "repl")
-            ;; (list "nix-shell" "--run" (combine-and-quote-strings '("cabal" "repl") )) FIXME
-            )
+    (let* ((args (dante-command-line (list "cabal" "repl")))
            (process (with-current-buffer buffer
                       (when dante-debug
                         (message "Dante command line: %s" (combine-and-quote-strings args)))
@@ -1322,10 +1265,11 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (process-send-string process ":set +c\n")
-      (process-send-string process ":set -fobject-code\n")
+      ;; (process-send-string process ":set -fobject-code\n") ;; when this is set one cannot get the types of functions
       (process-send-string process ":set prompt \"\\4\"\n")
       (with-current-buffer buffer
         (erase-buffer)
+        (setq dante-arguments args)
         (setq dante-targets targets)
         (setq dante-source-buffer source-buffer)
         (setq dante-starting t)
@@ -1429,8 +1373,7 @@ The process ended. Here is the reason that Emacs gives us:
      "For troubleshooting purposes, here are the arguments used to launch dante:
 
 "
-     (format "  stack ghci %s"
-             (combine-and-quote-strings dante-arguments))
+     (combine-and-quote-strings dante-arguments)
      "
 
 WHAT TO DO NEXT
@@ -1889,6 +1832,7 @@ suggestions are available."
             " Dante"
           (format " Dante:%d" (length dante-suggestions)))))
 
+  
 (defun dante-extensions ()
   "Get extensions for the current project's GHC."
   (with-current-buffer (dante-buffer 'backend)
@@ -1896,7 +1840,8 @@ suggestions are available."
         (setq dante-extensions
               (split-string
                (shell-command-to-string
-                "stack exec --verbosity silent -- ghc --supported-extensions"))))))
+                (combine-and-quote-strings
+                 (dante-command-line (list "ghc" "--supported-extensions")))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Auto actions
