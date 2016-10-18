@@ -1199,10 +1199,11 @@ If provided, use the specified TARGETS and SOURCE-BUFFER."
       (dante-start-process-in-buffer buffer targets source-buffer))))
 
 (defun dante-environment ()
-  (if dante-environment dante-environment
-    (if (file-exists-p (concat (dante-project-root) "shell.nix"))
-        'nix
-      'bare)))
+  (or dante-environment
+      (setq dante-environment
+            (if (file-exists-p (concat (dante-project-root) "shell.nix"))
+                'nix
+              'bare))))
 
 (defun dante-command-line (cmd)
   (cl-case (dante-environment)
@@ -1415,9 +1416,9 @@ Uses the directory of the current buffer for context."
   "Get the current stack config directory.
 This is the directory where the .cabal file is placed for
 this project."
-  (if dante-project-root
-      dante-project-root
-    (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name)))))
+  (or dante-project-root
+      (setq dante-project-root
+            (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name))))))
 
 (defun dante-package-name (&optional cabal-file)
   "Get the current package name from a nearby .cabal file.
