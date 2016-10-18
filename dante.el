@@ -1,5 +1,11 @@
 ;;; dante.el --- Development mode for Haskell -*- lexical-binding: t -*-
 
+;; DANTE: Do Not Aim To Expand.
+
+;; This is a mode for GHCi advanced "IDE" features, which does not aim
+;; to add other dependencies. It aims to be minimal as far as
+;; possible.
+
 ;; Copyright (c) 2016 Jean-Philippe Bernardy
 ;; Copyright (c) 2016 Chris Done
 ;; Copyright (c) 2015 Athur Fayzrakhmanov
@@ -9,7 +15,7 @@
 ;; Author: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 ;; Maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 ;; URL: https://github.com/jyp/dante
-;; Created: 3rd June 2016
+;; Created: October 2016
 ;; Keywords: haskell, tools
 ;; Package-Requires: ((flycheck "0.30") (company "0.8") (emacs "25.1") (haskell-mode "13.0"))
 
@@ -64,12 +70,12 @@
   :group 'dante
   :type 'boolean)
 
-(defcustom dante-nix nil
-  "Run commands in a nix-shell."
+(defcustom dante-environment nil
+  "Environment to use: nix or bare ghc(i)."
   :group 'dante
-  :type 'boolean)
+  :type (choice (const :tag "Nix" nix)
+                (const :tag "Bare" bare)))
 (make-local-variable 'dante-nix)
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Modes
@@ -101,7 +107,6 @@
 
 (define-key dante-mode-map (kbd "C-c C-t") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c C-i") 'dante-info)
-(define-key dante-mode-map (kbd "M-.") 'dante-goto-definition)
 (define-key dante-mode-map (kbd "C-c C-l") 'dante-repl-load)
 (define-key dante-mode-map (kbd "C-c C-z") 'dante-repl)
 (define-key dante-mode-map (kbd "C-c C-r") 'dante-apply-suggestions)
@@ -248,26 +253,6 @@ line as a type signature."
              (dante-fontify-expression info))
             (goto-char (point-min))))))))
 
-(defun dante-goto-definition ()
-  "Jump to the definition of the thing at point."
-  (interactive)
-  (let ((result (apply #'dante-get-loc-at (dante-thing-at-point))))
-    (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
-                        result)
-      (if (fboundp 'xref-push-marker-stack) ;; Emacs 25
-          (xref-push-marker-stack)
-        (with-no-warnings
-          (ring-insert find-tag-marker-ring (point-marker))))
-      (let ((file (match-string 1 result))
-            (line (string-to-number (match-string 2 result)))
-            (col (string-to-number (match-string 3 result))))
-        (unless (string= file (dante-temp-file-name))
-          (find-file file))
-        (pop-mark)
-        (goto-char (point-min))
-        (forward-line (1- line))
-        (forward-char (1- col))))))
-
 (defun dante-restart ()
   "Simply restart the process with the same configuration as before."
   (interactive)
@@ -278,7 +263,7 @@ line as a type signature."
       (dante-get-worker-create 'backend targets (current-buffer)))))
 
 (defun dante-targets ()
-  "Set the targets to use for cabal repl."
+  "Set the targets to use for cabal repl"
   (interactive)
   (let* ((old-targets
           (with-current-buffer (dante-buffer 'backend)
@@ -296,45 +281,6 @@ If not provided, WORKER defaults to the current worker process."
   (if worker
       (dante-delete-worker worker)
     (dante-delete-worker 'backend)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; DevelMain integration
-
-(defun dante-devel-reload ()
-  "Reload the module `DevelMain' and then run `DevelMain.update'.
-
-This is for doing live update of the code of servers or GUI
-applications.  Put your development version of the program in
-`DevelMain', and define `update' to auto-start the program on a
-new thread, and use the `foreign-store' package to access the
-running context across :load/:reloads in Dante."
-  (interactive)
-  (unwind-protect
-      (with-current-buffer
-          (or (get-buffer "DevelMain.hs")
-              (if (y-or-n-p
-                   "You need to open a buffer named DevelMain.hs.  Find now? ")
-                  (ido-find-file)
-                (error "No DevelMain.hs buffer")))
-        (message "Reloading ...")
-        (dante-async-call
-         'backend
-         ":l DevelMain"
-         (current-buffer)
-         (lambda (buffer reply)
-           (if (string-match "^OK, modules loaded" reply)
-               (dante-async-call
-                'backend
-                "DevelMain.update"
-                buffer
-                (lambda (_buffer reply)
-                  (message "DevelMain updated. Output was:\n%s"
-                           reply)))
-             (progn
-               (message "DevelMain FAILED. Switch to DevelMain.hs and compile that.")
-               (switch-to-buffer buffer)
-               (flycheck-buffer)
-               (flycheck-list-errors))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
@@ -1248,7 +1194,7 @@ If provided, use the specified TARGETS and SOURCE-BUFFER."
       (dante-start-process-in-buffer buffer targets source-buffer))))
 
 (defun dante-command-line (cmd)
-  (if dante-nix
+  (if dante-nix ;; FIXME: cl-case on dante-environment
       (list "nix-shell" "--run" (combine-and-quote-strings cmd))
     cmd))
 
@@ -1265,7 +1211,7 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (process-send-string process ":set +c\n")
-      ;; (process-send-string process ":set -fobject-code\n") ;; when this is set one cannot get the types of functions
+      (process-send-string process ":set -fbyte-code\n") ;; when this is set one cannot get the types of functions
       (process-send-string process ":set prompt \"\\4\"\n")
       (with-current-buffer buffer
         (erase-buffer)
@@ -1456,9 +1402,8 @@ Uses the directory of the current buffer for context."
 
 (defun dante-project-root ()
   "Get the current stack config directory.
-This is either the directory where the stack.yaml is placed for
-this project, or the global one if no such project-specific
-config exists."
+This is the directory where the .cabal file is placed for
+this project."
   (if dante-project-root
       dante-project-root
       (error "You need to set dante-project-root, probably by
@@ -2010,6 +1955,29 @@ suggestions are available."
   "Display a warning message made from (format MESSAGE ARGS...).
 Equivalent to 'warn', but label the warning as coming from dante."
   (display-warning 'dante (apply 'format message args) :warning))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; xref support
+
+(defun dante--xref-backend () (when dante-mode 'dante))
+
+(cl-defmethod xref-backend-identifier-at-point ((_backend (eql dante)))
+  (dante-ident-at-point))
+
+(cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
+  (let ((result (apply #'dante-get-loc-at (dante-thing-at-point))))
+    (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
+                        result)
+      (let ((file (match-string 1 result))
+            (line (string-to-number (match-string 2 result)))
+            (col (string-to-number (match-string 3 result))))
+            (list (xref-make "def" (xref-make-file-location
+                                    (if (string= file (dante-temp-file-name)) (buffer-file-name) file)
+                                    line
+                                    (1- col))))))))
+
+(add-hook 'xref-backend-functions 'dante--xref-backend)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
