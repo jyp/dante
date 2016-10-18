@@ -75,7 +75,7 @@
   :group 'dante
   :type (choice (const :tag "Nix" nix)
                 (const :tag "Bare" bare)))
-(make-local-variable 'dante-nix)
+(make-local-variable 'dante-environment)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Modes
@@ -1194,9 +1194,9 @@ If provided, use the specified TARGETS and SOURCE-BUFFER."
       (dante-start-process-in-buffer buffer targets source-buffer))))
 
 (defun dante-command-line (cmd)
-  (if dante-nix ;; FIXME: cl-case on dante-environment
-      (list "nix-shell" "--run" (combine-and-quote-strings cmd))
-    cmd))
+  (cl-case dante-environment
+    (nix (list "nix-shell" "--run" (combine-and-quote-strings cmd)))
+    (t cmd)))
 
 (defun dante-start-process-in-buffer (buffer &optional targets source-buffer)
   "Start a Dante worker in BUFFER, for the default or specified TARGETS.
