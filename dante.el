@@ -73,8 +73,8 @@
 (defcustom dante-environment nil
   "Environment to use: nix or bare ghc(i)."
   :group 'dante
-  :type (choice (const :tag "Nix" nix)
-                (const :tag "Bare" bare)))
+  :type '(choice (const :tag "Nix" nix)
+                 (const :tag "Bare" bare)))
 (make-local-variable 'dante-environment)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
