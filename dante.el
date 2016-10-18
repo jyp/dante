@@ -99,9 +99,7 @@
       (interactive-haskell-mode -1)))
   (if dante-mode
       (progn (flycheck-select-checker 'dante)
-             ;; (flycheck-mode)
-             ;; (add-to-list (make-local-variable 'company-backends) 'company-dante)
-             ;; (company-mode)
+             (add-to-list (make-local-variable 'company-backends) 'company-dante)
              (setq-local eldoc-documentation-function 'eldoc-dante))
     (message "Dante mode disabled.")))
 
@@ -110,6 +108,11 @@
 (define-key dante-mode-map (kbd "C-c C-l") 'dante-repl-load)
 (define-key dante-mode-map (kbd "C-c C-z") 'dante-repl)
 (define-key dante-mode-map (kbd "C-c C-r") 'dante-apply-suggestions)
+
+(defun turn-on-dante-mode ()
+  "Turn on Dante in the current buffer."
+  (interactive)
+  (dante-mode 1))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Global variables/state
@@ -125,8 +128,8 @@
                             (1 t)
                             (t nil)))
   (if dante-global-mode
-      (add-hook 'haskell-mode-hook 'dante-mode)
-    (remove-hook 'haskell-mode-hook 'dante-mode))
+      (add-hook 'haskell-mode-hook 'turn-on-dante-mode)
+    (remove-hook 'haskell-mode-hook 'turn-on-dante-mode))
   (when (eq this-command 'global-dante-mode)
     (message "Dante mode is now %s on all future Haskell buffers."
              (if dante-global-mode
