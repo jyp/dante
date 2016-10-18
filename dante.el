@@ -1198,10 +1198,16 @@ If provided, use the specified TARGETS and SOURCE-BUFFER."
         buffer
       (dante-start-process-in-buffer buffer targets source-buffer))))
 
+(defun dante-environment ()
+  (if dante-environment dante-environment
+    (if (file-exists-p (concat (dante-project-root) "shell.nix"))
+        'nix
+      'bare)))
+
 (defun dante-command-line (cmd)
-  (cl-case dante-environment
+  (cl-case (dante-environment)
     (nix (list "nix-shell" "--run" (combine-and-quote-strings cmd)))
-    (t cmd)))
+    (bare cmd)))
 
 (defun dante-start-process-in-buffer (buffer &optional targets source-buffer)
   "Start a Dante worker in BUFFER, for the default or specified TARGETS.
