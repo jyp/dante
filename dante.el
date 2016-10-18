@@ -1777,7 +1777,6 @@ suggestions are available."
             " Dante"
           (format " Dante:%d" (length dante-suggestions)))))
 
-  
 (defun dante-extensions ()
   "Get extensions for the current project's GHC."
   (with-current-buffer (dante-buffer 'backend)
@@ -1966,6 +1965,8 @@ Equivalent to 'warn', but label the warning as coming from dante."
   (dante-ident-at-point))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
+  ;;FIXME: do this before (concat ":l " (dante-temp-file-name))
+
   (let ((result (apply #'dante-get-loc-at (dante-thing-at-point))))
     (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
                         result)
