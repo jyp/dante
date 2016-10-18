@@ -149,7 +149,12 @@ LIST is a FIFO.")
   "Buffer from which Dante was first requested to start.")
 
 (defvar-local dante-project-root nil
-  "The project root of the current buffer.")
+  "The project root of the current buffer.
+
+When nil, dante will guess the value using the
+`dante-project-root' function.  Hint: It is probably a good idea
+to set this as a file or directory variable if the guess is
+wrong.")
 
 (defvar-local dante-package-name nil
   "The package name associated with the current buffer.")
@@ -1406,8 +1411,7 @@ This is the directory where the .cabal file is placed for
 this project."
   (if dante-project-root
       dante-project-root
-      (error "You need to set dante-project-root, probably by
-      using an emacs directory variable.")))
+    (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name)))))
 
 (defun dante-package-name (&optional cabal-file)
   "Get the current package name from a nearby .cabal file.
@@ -1965,8 +1969,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
   (dante-ident-at-point))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
-  ;;FIXME: do this before (concat ":l " (dante-temp-file-name))
-
+  (dante-async-call 'backend (concat ":l " (dante-temp-file-name)))
   (let ((result (apply #'dante-get-loc-at (dante-thing-at-point))))
     (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
                         result)
