@@ -1006,7 +1006,7 @@ type as arguments."
 
 (defun dante-format-get-type-at (beg end)
   "Compose a request for getting types in region from BEG to END."
-  (format ":type-at %S %d %d %d %d %S"
+  (format ":type-at %S %d %d %d %d %s"
           (dante-temp-file-name)
           (save-excursion (goto-char beg)
                           (line-number-at-pos))
