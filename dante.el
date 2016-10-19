@@ -304,19 +304,16 @@ If not provided, WORKER defaults to the current worker process."
       (dante-async-call
        'backend
        (concat ":l " (dante-temp-file-name))
-       (list :cont cont
-             :file-buffer file-buffer
-             :checker checker)
-       (lambda (state string)
+       (lambda (string)
          (let ((compile-ok (string-match "OK, modules loaded: \\(.*\\)\\.$" string)))
-           (with-current-buffer (plist-get state :file-buffer)
+           (with-current-buffer file-buffer
              (let ((modules (match-string 1 string))
                    (msgs (dante-parse-errors-warnings-splices
-                          (plist-get state :checker)
+                          checker
                           (current-buffer)
                           string)))
                (dante-collect-compiler-messages msgs)
-               (funcall (plist-get state :cont)
+               (funcall cont
                         'finished
                         (cl-remove-if (lambda (msg)
                                         (eq 'splice (flycheck-error-level msg)))
@@ -325,8 +322,7 @@ If not provided, WORKER defaults to the current worker process."
                  (dante-async-call 'backend
                                     (concat ":m + "
                                             (replace-regexp-in-string modules "," ""))
-                                    nil
-                                    (lambda (_st _))))))))))))
+                                    (lambda (_))))))))))))
 
 
 (flycheck-define-generic-checker 'dante
@@ -997,19 +993,16 @@ x:\\foo\\bar (i.e., Windows)."
   "Call CONT with type of the region denoted by BEG and END.
 CONT is called within the current buffer, with BEG, END and the
 type as arguments."
+  (let ((source-buffer (current-buffer)))
   (dante-async-call
    'backend
    (dante-format-get-type-at beg end)
-   (list :cont cont
-         :source-buffer (current-buffer)
-         :beg beg
-         :end end)
-   (lambda (state reply)
-     (with-current-buffer (plist-get state :source-buffer)
-       (funcall (plist-get state :cont)
-                (plist-get state :beg)
-                (plist-get state :end)
-                (replace-regexp-in-string "\n$" "" reply))))))
+   (lambda (reply)
+     (with-current-buffer source-buffer
+       (funcall cont
+                beg
+                end
+                (replace-regexp-in-string "\n$" "" reply)))))))
 
 (defun dante-format-get-type-at (beg end)
   "Compose a request for getting types in region from BEG to END."
@@ -1108,12 +1101,10 @@ passed to CONT in SOURCE-BUFFER."
            (save-excursion (goto-char end)
                            (1+ (current-column)))
            (buffer-substring-no-properties beg end))
-   (list :cont cont :source-buffer source-buffer)
-   (lambda (state reply)
-     (with-current-buffer
-         (plist-get state :source-buffer)
+   (lambda (reply)
+     (with-current-buffer source-buffer
        (funcall
-        (plist-get state :cont)
+        cont
         (if (string-match "^*** Exception" reply)
             (list)
           (mapcar
@@ -1127,12 +1118,9 @@ Completions for PREFIX are passed to CONT in SOURCE-BUFFER."
   (dante-async-call
    'backend
    (format ":complete repl %S" prefix)
-   (list :cont cont :source-buffer source-buffer)
-   (lambda (state reply)
-     (with-current-buffer
-         (plist-get state :source-buffer)
-       (funcall
-        (plist-get state :cont)
+   (lambda (reply)
+     (with-current-buffer source-buffer
+       (funcall cont
         (mapcar
          (lambda (x)
            (replace-regexp-in-string "\\\"" "" x))
@@ -1157,25 +1145,23 @@ Completions for PREFIX are passed to CONT in SOURCE-BUFFER."
     (dante-async-call
      worker
      cmd
-     result
-     (lambda (result reply)
+     (lambda (reply)
        (setf (car result) reply)))
     (with-current-buffer (dante-buffer worker)
       (while (not (null dante-callbacks))
         (sleep-for 0.0001)))
     (car result)))
 
-(defun dante-async-call (worker cmd &optional state callback)
+(defun dante-async-call (worker cmd &optional callback)
   "Send WORKER the command string CMD.
-The result, along with the given STATE, is passed to CALLBACK
+The result is passed to CALLBACK
 as (CALLBACK STATE REPLY)."
   (let ((buffer (dante-buffer worker)))
     (if (and buffer (process-live-p (get-buffer-process buffer)))
         (progn (with-current-buffer buffer
                  (setq dante-callbacks
                        (append dante-callbacks
-                               (list (list state
-                                           (or callback #'ignore)
+                               (list (list (or callback #'ignore)
                                            cmd)))))
                (when dante-debug
                  (message "[Dante] -> %s" cmd))
@@ -1235,12 +1221,8 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
         (setq dante-source-buffer source-buffer)
         (setq dante-starting t)
         (setq dante-callbacks
-              (list (list (cons source-buffer
-                                buffer)
-                          (lambda (buffers _msg)
-                            (let ((source-buffer (car buffers))
-                                  (process-buffer (cdr buffers)))
-                              (with-current-buffer process-buffer
+              (list (list (lambda (_msg)
+                              (with-current-buffer buffer
                                 (setq-local dante-starting nil))
                               (when source-buffer
                                 (with-current-buffer source-buffer
@@ -1248,7 +1230,7 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
                                     (run-with-timer 0 nil
                                                     'dante-call-in-buffer
                                                     (current-buffer)
-                                                    'dante-flycheck-buffer)))))
+                                                    'dante-flycheck-buffer))))
                             (message "Booted up dante!"))))))
       (set-process-filter
        process
@@ -1360,12 +1342,11 @@ You can always run M-x dante-restart to make it try again.
       (goto-char (point-min))
       (when (search-forward "\4" (point-max) t 1)
         (let* ((next-callback (pop dante-callbacks))
-               (state (nth 0 next-callback))
-               (func (nth 1 next-callback)))
+               (func (nth 0 next-callback)))
           (let ((string (strip-carriage-returns (buffer-substring (point-min) (1- (point))))))
             (if next-callback
                 (progn (with-temp-buffer
-                         (funcall func state string))
+                         (funcall func string))
                        (setq repeat t))
               (when dante-debug
                 (dante--warn "Received output but no callback in `dante-callbacks': %S"
