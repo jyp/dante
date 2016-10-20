@@ -17,7 +17,7 @@
 ;; URL: https://github.com/jyp/dante
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((flycheck "0.30") (company "0.8") (emacs "25.1") (haskell-mode "13.0"))
+;; Package-Requires: ((flycheck "0.30") (emacs "25.1") (haskell-mode "13.0"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -119,26 +119,19 @@ a file or directory variable if the guess is wrong."
   (interactive)
   (dante-mode 1))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Global variables/state
+;;;###autoload
+(define-minor-mode global-dante-mode
+  "Toggle Global dante mode on or off.
+With a prefix argument ARG, enable Global dante mode if ARG is
+positive, and disable it otherwise.  If called from Lisp, enable
+the mode if ARG is omitted or nil, and toggle it if ARG is ‘toggle’.
 
-(defvar dante-global-mode nil
-  "Global mode is enabled?")
-
-(defun global-dante-mode (active)
-  "Enable Dante on all Haskell mode buffers."
-  (interactive "p")
-  (setq dante-global-mode (cl-case active
-                            (nil (not dante-global-mode))
-                            (1 t)
-                            (t nil)))
-  (if dante-global-mode
-      (add-hook 'haskell-mode-hook 'turn-on-dante-mode)
-    (remove-hook 'haskell-mode-hook 'turn-on-dante-mode))
-  (when (eq this-command 'global-dante-mode)
-    (message "Dante mode is now %s on all future Haskell buffers."
-             (if dante-global-mode
-                 "enabled" "disabled"))))
+If Global dante mode is on, `dante-mode' will be enabled in all
+haskell buffers."
+  :group 'dante
+  :global t
+  (funcall (if global-dante-mode #'add-hook #'remove-hook)
+           'haskell-mode-hook  #'turn-on-dante-mode))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Buffer-local variables/state
@@ -206,13 +199,11 @@ You can use this to kill them or look inside."
 (defun dante-fontify-expression (expression)
   "Return a haskell-fontified version of EXPRESSION."
   (with-temp-buffer
-    (when (fboundp 'haskell-mode)
-      (haskell-mode))
-    (insert expression)
-    (if (fboundp 'font-lock-ensure)
-        (font-lock-ensure)
-      (font-lock-fontify-buffer))
-    (buffer-string)))
+    (let ((haskell-hook nil)) ;; to keep switching mode cheap
+      (when (fboundp 'haskell-mode) (haskell-mode))
+      (insert expression)
+      (font-lock-ensure)
+      (buffer-string))))
 
 (defun dante-type-at (insert)
   "Get the type of the thing or selection at point.
@@ -310,7 +301,6 @@ If not provided, WORKER defaults to the current worker process."
                       (cl-remove-if (lambda (msg)
                                       (eq 'splice (flycheck-error-level msg)))
                                     msgs)))))))))
-
 
 (flycheck-define-generic-checker 'dante
   "A syntax and type checker for Haskell using a Dante worker
@@ -570,13 +560,13 @@ x:\\foo\\bar (i.e., Windows)."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Query/commands
 
-(defun dante-kill-last-newline (string)
+(defun dante--kill-last-newline (string)
   (replace-regexp-in-string "\n$" "" string))
 
 (defun dante-get-type-at (beg end)
   "Get the type at the given region denoted by BEG and END."
   (dante-async-load-current-buffer)
-  (dante-kill-last-newline
+  (dante--kill-last-newline
    (dante-blocking-call 'backend (dante-format-get-type-at beg end))))
 
 (defun dante-get-type-at-async (cont beg end)
@@ -592,7 +582,7 @@ type as arguments."
        (funcall cont
                 beg
                 end
-                (replace-regexp-in-string "\n$" "" reply)))))))
+                (dante--kill-last-newline reply)))))))
 
 (defun dante-format-get-type-at (beg end)
   "Compose a request for getting types in region from BEG to END."
@@ -611,8 +601,7 @@ type as arguments."
 (defun dante-get-info-of (thing)
   "Get info for THING."
   (let ((optimistic-result
-         (replace-regexp-in-string
-          "\n$" ""
+         (dante--kill-last-newline
           (dante-blocking-call
            'backend
            (format ":i %s" thing)))))
@@ -631,8 +620,7 @@ type as arguments."
                (dante-async-call
                 'backend
                 ":set -fobject-code")
-               (replace-regexp-in-string
-                "\n$" ""
+               (dante--kill-last-newline
                 (dante-blocking-call
                  'backend
                  (format ":i %s" thing))))
@@ -640,8 +628,7 @@ type as arguments."
 
 (defun dante-get-loc-at (beg end)
   "Get the location of the identifier denoted by BEG and END."
-  (replace-regexp-in-string
-   "\n$" ""
+  (dante--kill-last-newline
    (dante-blocking-call
     'backend
     (format ":loc-at %S %d %d %d %d %S"
@@ -658,8 +645,7 @@ type as arguments."
 
 (defun dante-get-uses-at (beg end)
   "Return usage list for identifier denoted by BEG and END."
-  (replace-regexp-in-string
-   "\n$" ""
+  (dante--kill-last-newline
    (dante-blocking-call
     'backend
     (format ":uses %S %d %d %d %d %S"
@@ -959,9 +945,7 @@ Uses the directory of the current buffer for context."
             root)))
 
 (defun dante-project-root ()
-  "Get the current stack config directory.
-This is the directory where the .cabal file is placed for
-this project."
+  "Get the directory where the .cabal file is placed."
   (or dante-project-root
       (setq dante-project-root
             (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name))))))
@@ -1027,7 +1011,6 @@ a list is returned instead of failing with a nil result."
   "Display a warning message made from (format MESSAGE ARGS...).
 Equivalent to 'warn', but label the warning as coming from dante."
   (display-warning 'dante (apply 'format message args) :warning))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; xref support
