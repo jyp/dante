@@ -668,25 +668,9 @@ type as arguments."
     (dante-async-call
      worker
      cmd
-     (lambda (reply)
-       (setq result reply)))
+     (lambda (reply) (setq result reply)))
     (while (not result) (sleep-for 0.0001))
     result))
-
-(defun dante-async-call (worker cmd &optional callback)
-  "Send WORKER the command string CMD.
-The result is passed to CALLBACK as (CALLBACK STATE REPLY)."
-  (let ((buffer (dante-buffer worker)))
-    (if (and buffer (process-live-p (get-buffer-process buffer)))
-        (progn (with-current-buffer buffer
-                 (setq dante-callbacks
-                       (append dante-callbacks
-                               (list (list (or callback #'ignore)
-                                           cmd)))))
-               (when dante-debug
-                 (message "[Dante] -> %s" cmd))
-               (comint-simple-send (dante-process worker) cmd))
-      (error "Dante process is not running: run M-x dante-restart to start it"))))
 
 (defun dante-buffer (worker)
   "Get the WORKER buffer for the current directory."
@@ -751,7 +735,7 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
                                                     'dante-call-in-buffer
                                                     (current-buffer)
                                                     'dante-flycheck-buffer))))
-                            (message "Booted up dante!"))))))
+                              (message "GHCi started!"))))))
       (set-process-filter
        process
        (lambda (process string)
@@ -761,23 +745,25 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
            (with-current-buffer (process-buffer process)
              (goto-char (point-max))
              (insert string)
-             (when (and dante-try-with-build
-                        dante-starting)
-               (let ((last-line (buffer-substring-no-properties
-                                 (line-beginning-position)
-                                 (line-end-position))))
-                 (if (string-match "^Progress" last-line)
-                     (message "Booting up dante (building dependencies: %s)"
-                              (downcase
-                               (or (car (split-string (replace-regexp-in-string
-                                                       "\u0008+" "\n"
-                                                       last-line)
-                                                      "\n" t))
-                                   "...")))
-                   (message "Booting up dante ..."))))
              (dante-read-buffer)))))
       (set-process-sentinel process 'dante-sentinel)
       buffer)))
+
+(defun dante-async-call (worker cmd &optional callback)
+  "Send WORKER the command string CMD.
+The result is passed to CALLBACK as (CALLBACK STATE REPLY)."
+  (let ((buffer (dante-buffer worker)))
+    (if (and buffer (process-live-p (get-buffer-process buffer)))
+        (progn (with-current-buffer buffer
+                 (setq dante-callbacks
+                       (append dante-callbacks
+                               (list (list (or callback #'ignore)
+                                           cmd)))))
+               (when dante-debug
+                 (message "[Dante] -> %s" cmd))
+               (comint-simple-send (dante-process worker) cmd))
+      (error "Dante process is not running: run M-x dante-restart to start it"))))
+
 
 (defun dante-flycheck-buffer ()
   "Run flycheck in the buffer.
@@ -790,7 +776,7 @@ Restarts flycheck in case there was a problem and flycheck is stuck."
   "Handle when PROCESS reports a CHANGE.
 This is a standard process sentinel function."
   (when (buffer-live-p (process-buffer process))
-    (when (and (not (process-live-p process)))
+    (when (not (process-live-p process))
       (let ((buffer (process-buffer process)))
         (if (with-current-buffer buffer dante-deleting)
             (message "Dante process deleted.")
