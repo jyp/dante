@@ -293,6 +293,12 @@ If not provided, WORKER defaults to the current worker process."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
 
+(defun dante-async-load-current-buffer (&optional cont)
+  (dante-async-call 'backend (concat ":l *" (dante-temp-file-name)) cont)
+  ;; Note the * so that we collect the type info for the current
+  ;; module (also, probably faster.)
+)
+
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (dante-gave-up 'backend)
@@ -301,28 +307,18 @@ If not provided, WORKER defaults to the current worker process."
                       cont
                       'interrupted)
     (let ((file-buffer (current-buffer)))
-      (dante-async-call
-       'backend
-       (concat ":l " (dante-temp-file-name))
+      (dante-async-load-current-buffer
        (lambda (string)
-         (let ((compile-ok (string-match "OK, modules loaded: \\(.*\\)\\.$" string)))
-           (with-current-buffer file-buffer
-             (let ((modules (match-string 1 string))
-                   (msgs (dante-parse-errors-warnings-splices
-                          checker
-                          (current-buffer)
-                          string)))
-               (dante-collect-compiler-messages msgs)
-               (funcall cont
-                        'finished
-                        (cl-remove-if (lambda (msg)
-                                        (eq 'splice (flycheck-error-level msg)))
-                                      msgs))
-               (when compile-ok
-                 (dante-async-call 'backend
-                                    (concat ":m + "
-                                            (replace-regexp-in-string modules "," ""))
-                                    (lambda (_))))))))))))
+         (with-current-buffer file-buffer
+           (let ((msgs (dante-parse-errors-warnings-splices
+                        checker
+                        (current-buffer)
+                        string)))
+             (funcall cont
+                      'finished
+                      (cl-remove-if (lambda (msg)
+                                      (eq 'splice (flycheck-error-level msg)))
+                                    msgs)))))))))
 
 
 (flycheck-define-generic-checker 'dante
@@ -364,8 +360,7 @@ CHECKER and BUFFER are added to each item parsed from STRING."
                        line column type
                        msg
                        :checker checker
-                       :buffer (when (string= temp-file file)
-                                 buffer)
+                       :buffer (when (string= temp-file file) buffer)
                        :filename (dante-buffer-file-name buffer))
                       messages)))
         (forward-line -1))
@@ -981,13 +976,14 @@ x:\\foo\\bar (i.e., Windows)."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Query/commands
 
+(defun dante-kill-last-newline (string)
+  (replace-regexp-in-string "\n$" "" string))
+
 (defun dante-get-type-at (beg end)
   "Get the type at the given region denoted by BEG and END."
-  (replace-regexp-in-string
-   "\n$" ""
-   (dante-blocking-call
-    'backend
-    (dante-format-get-type-at beg end))))
+  (dante-async-load-current-buffer)
+  (dante-kill-last-newline
+   (dante-blocking-call 'backend (dante-format-get-type-at beg end))))
 
 (defun dante-get-type-at-async (cont beg end)
   "Call CONT with type of the region denoted by BEG and END.
@@ -1211,8 +1207,8 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
                       (message "Booting up dante ...")
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
-      (process-send-string process ":set +c\n")
-      (process-send-string process ":set -fbyte-code\n") ;; when this is set one cannot get the types of functions
+      (process-send-string process ":set +c\n") ;; collect type info
+      (dante-async-call 'backend ":set -fobject-code") ;; so that compilation results are cached
       (process-send-string process ":set prompt \"\\4\"\n")
       (with-current-buffer buffer
         (erase-buffer)
