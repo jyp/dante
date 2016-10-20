@@ -42,8 +42,7 @@
 ;; * Go to definition
 ;; * Type of selection
 ;; * Info
-;; TODO
-;; * Find uses
+;; TODO: * Find uses
 
 ;;; Code:
 
@@ -51,9 +50,7 @@
 (require 'json)
 (require 'warnings)
 (require 'cl-lib)
-(require 'company)
 (require 'comint)
-(require 'widget)
 (require 'eldoc)
 (eval-when-compile
   (require 'wid-edit))
@@ -71,11 +68,23 @@
   :type 'boolean)
 
 (defcustom dante-environment nil
-  "Environment to use: nix or bare ghc(i)."
+  "Environment to use: nix or bare ghc(i).
+Buffer-local: you can set this as a file or directory variable if
+the guess is wrong."
   :group 'dante
   :type '(choice (const :tag "Nix" nix)
-                 (const :tag "Bare" bare)))
+                 (const :tag "Bare" bare)
+                 (const :tag "Auto" nil)))
 (make-local-variable 'dante-environment)
+
+(defcustom dante-project-root nil
+  "The project root.
+When nil, dante will guess the value using the
+`dante-project-root' function.  Buffer-local: you can set this as
+a file or directory variable if the guess is wrong."
+  :group 'dante
+  :type 'string)
+(make-local-variable 'dante-project-root)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Modes
@@ -99,7 +108,6 @@
       (interactive-haskell-mode -1)))
   (if dante-mode
       (progn (flycheck-select-checker 'dante)
-             (add-to-list (make-local-variable 'company-backends) 'company-dante)
              (setq-local eldoc-documentation-function 'eldoc-dante))
     (message "Dante mode disabled.")))
 
@@ -148,14 +156,6 @@ LIST is a FIFO.")
 (defvar-local dante-source-buffer (list)
   "Buffer from which Dante was first requested to start.")
 
-(defvar-local dante-project-root nil
-  "The project root of the current buffer.
-
-When nil, dante will guess the value using the
-`dante-project-root' function.  Hint: It is probably a good idea
-to set this as a file or directory variable if the guess is
-wrong.")
-
 (defvar-local dante-package-name nil
   "The package name associated with the current buffer.")
 
@@ -178,9 +178,6 @@ This is slower, but will build required dependencies.")
 
 (defvar-local dante-hoogle-port nil
   "Port that hoogle server is listening on.")
-
-(defvar-local dante-extensions nil
-  "Extensions supported by the compiler.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
