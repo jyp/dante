@@ -169,9 +169,6 @@ This is slower, but will build required dependencies.")
 (defvar-local dante-starting nil
   "When non-nil, indicates that the dante process starting up.")
 
-(defvar-local dante-hoogle-port nil
-  "Port that hoogle server is listening on.")
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
 
