@@ -905,7 +905,7 @@ You can always run M-x dante-restart to make it try again.
       (when (search-forward "\4" (point-max) t 1)
         (let* ((next-callback (pop dante-callbacks))
                (func (nth 0 next-callback)))
-          (let ((string (strip-carriage-returns (buffer-substring (point-min) (1- (point))))))
+          (let ((string (dante--strip-carriage-returns (buffer-substring (point-min) (1- (point))))))
             (if next-callback
                 (progn (with-temp-buffer
                          (funcall func string))
@@ -915,7 +915,7 @@ You can always run M-x dante-restart to make it try again.
                       string)))))
         (delete-region (point-min) (point))))))
 
-(defun strip-carriage-returns (string)
+(defun dante--strip-carriage-returns (string)
   "Strip the \\r from Windows \\r\\n line endings in STRING."
   (replace-regexp-in-string "\r" "" string))
 
