@@ -588,14 +588,10 @@ type as arguments."
   "Compose a request for getting types in region from BEG to END."
   (format ":type-at %S %d %d %d %d %s"
           (dante-temp-file-name)
-          (save-excursion (goto-char beg)
-                          (line-number-at-pos))
-          (save-excursion (goto-char beg)
-                          (1+ (current-column)))
-          (save-excursion (goto-char end)
-                          (line-number-at-pos))
-          (save-excursion (goto-char end)
-                          (1+ (current-column)))
+          (line-number-at-pos beg)
+          (dante--ghc-column-number-at-pos beg)
+          (line-number-at-pos end)
+          (dante--ghc-column-number-at-pos end)
           (buffer-substring-no-properties beg end)))
 
 (defun dante-get-info-of (thing)
@@ -614,9 +610,7 @@ type as arguments."
                (set-buffer-modified-p t)
                (save-buffer)
                (unless (member 'save flycheck-check-syntax-automatically)
-                 (dante-async-call
-                  'backend
-                  (concat ":l " (dante-temp-file-name))))
+                 (dante-async-load-current-buffer))
                (dante-async-call
                 'backend
                 ":set -fobject-code")
@@ -626,6 +620,9 @@ type as arguments."
                  (format ":i %s" thing))))
       optimistic-result)))
 
+(defun dante--ghc-column-number-at-pos (pos)
+  (1+ (save-excursion (goto-char pos) (current-column))))
+
 (defun dante-get-loc-at (beg end)
   "Get the location of the identifier denoted by BEG and END."
   (dante--kill-last-newline
@@ -633,14 +630,10 @@ type as arguments."
     'backend
     (format ":loc-at %S %d %d %d %d %S"
             (dante-temp-file-name)
-            (save-excursion (goto-char beg)
-                            (line-number-at-pos))
-            (save-excursion (goto-char beg)
-                            (1+ (current-column)))
-            (save-excursion (goto-char end)
-                            (line-number-at-pos))
-            (save-excursion (goto-char end)
-                            (1+ (current-column)))
+            (line-number-at-pos beg)
+            (dante--ghc-column-number-at-pos beg)
+            (line-number-at-pos end)
+            (dante--ghc-column-number-at-pos end)
             (buffer-substring-no-properties beg end)))))
 
 (defun dante-get-uses-at (beg end)
@@ -650,29 +643,11 @@ type as arguments."
     'backend
     (format ":uses %S %d %d %d %d %S"
             (dante-temp-file-name)
-            (save-excursion (goto-char beg)
-                            (line-number-at-pos))
-            (save-excursion (goto-char beg)
-                            (1+ (current-column)))
-            (save-excursion (goto-char end)
-                            (line-number-at-pos))
-            (save-excursion (goto-char end)
-                            (1+ (current-column)))
+            (line-number-at-pos beg)
+            (dante--ghc-column-number-at-pos beg)
+            (line-number-at-pos end)
+            (dante--ghc-column-number-at-pos end)
             (buffer-substring-no-properties beg end)))))
-
-(defun dante-get-repl-completions (source-buffer prefix cont)
-  "Get REPL completions and send to SOURCE-BUFFER.
-Completions for PREFIX are passed to CONT in SOURCE-BUFFER."
-  (dante-async-call
-   'backend
-   (format ":complete repl %S" prefix)
-   (lambda (reply)
-     (with-current-buffer source-buffer
-       (funcall cont
-        (mapcar
-         (lambda (x)
-           (replace-regexp-in-string "\\\"" "" x))
-         (cdr (split-string reply "\n" t))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Process communication
@@ -689,21 +664,18 @@ Completions for PREFIX are passed to CONT in SOURCE-BUFFER."
 
 (defun dante-blocking-call (worker cmd)
   "Send WORKER the command string CMD and block pending its result."
-  (let ((result (list nil)))
+  (let ((result nil))
     (dante-async-call
      worker
      cmd
      (lambda (reply)
-       (setf (car result) reply)))
-    (with-current-buffer (dante-buffer worker)
-      (while (not (null dante-callbacks))
-        (sleep-for 0.0001)))
-    (car result)))
+       (setq result reply)))
+    (while (not result) (sleep-for 0.0001))
+    result))
 
 (defun dante-async-call (worker cmd &optional callback)
   "Send WORKER the command string CMD.
-The result is passed to CALLBACK
-as (CALLBACK STATE REPLY)."
+The result is passed to CALLBACK as (CALLBACK STATE REPLY)."
   (let ((buffer (dante-buffer worker)))
     (if (and buffer (process-live-p (get-buffer-process buffer)))
         (progn (with-current-buffer buffer
