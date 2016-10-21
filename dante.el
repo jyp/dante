@@ -811,22 +811,19 @@ You can always run M-x dante-restart to make it try again.
 
 (defun dante-read-buffer ()
   "In the process buffer, we read what's in it."
-  (let ((repeat t))
-    (while repeat
-      (setq repeat nil)
-      (goto-char (point-min))
-      (when (search-forward "\4" (point-max) t 1)
-        (let* ((next-callback (pop dante-callbacks))
-               (func (nth 0 next-callback)))
-          (let ((string (dante--strip-carriage-returns (buffer-substring (point-min) (1- (point))))))
-            (if next-callback
-                (progn (with-temp-buffer
-                         (funcall func string))
-                       (setq repeat t))
-              (when dante-debug
-                (dante--warn "Received output but no callback in `dante-callbacks': %S"
-                      string)))))
-        (delete-region (point-min) (point))))))
+  (goto-char (point-min))
+  (when (search-forward "\4" (point-max) t 1)
+    (let* ((next-callback (pop dante-callbacks))
+           (func (nth 0 next-callback)))
+      (let ((string (dante--strip-carriage-returns (buffer-substring (point-min) (1- (point))))))
+        (delete-region (point-min) (point))
+        (if next-callback
+            (progn (with-temp-buffer
+                     (funcall func string))
+                   (dante-read-buffer))
+          (when dante-debug
+            (dante--warn "Received output but no callback in `dante-callbacks': %S"
+                         string)))))))
 
 (defun dante--strip-carriage-returns (string)
   "Strip the \\r from Windows \\r\\n line endings in STRING."
