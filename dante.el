@@ -148,10 +148,6 @@ not be installed.  The user will have to manually run
 `dante-restart' or `dante-targets' to destroy the buffer and
 create a fresh one without this variable enabled.")
 
-(defvar-local dante-try-with-build nil
-  "Try starting dante without --no-build.
-This is slower, but will build required dependencies.")
-
 (defvar-local dante-starting nil
   "When non-nil, indicates that the dante process starting up.")
 
@@ -749,15 +745,8 @@ This is a standard process sentinel function."
       (let ((buffer (process-buffer process)))
         (if (with-current-buffer buffer dante-deleting)
             (message "Dante process deleted.")
-          (if (and (dante-unsatisfied-package-p buffer)
-                   (not (buffer-local-value 'dante-try-with-build buffer)))
-              (progn (with-current-buffer buffer (setq-local dante-try-with-build t))
-                     (dante-start-process-in-buffer
-                      buffer
-                      (buffer-local-value 'dante-targets buffer)
-                      (buffer-local-value 'dante-source-buffer buffer)))
             (progn (with-current-buffer buffer (setq-local dante-give-up t))
-                   (dante-show-process-problem process change))))))))
+                   (dante-show-process-problem process change)))))))
 
 (defun dante-unsatisfied-package-p (buffer)
   "Return non-nil if BUFFER contain GHCi's unsatisfied package complaint."
