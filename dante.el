@@ -547,8 +547,7 @@ x:\\foo\\bar (i.e., Windows)."
   "Get the type at the given region denoted by BEG and END."
   (dante-async-call 'backend ":set -fobject-code")
   (dante-async-load-current-buffer)
-  (dante--kill-last-newline
-   (dante-blocking-call 'backend (dante-format-get-type-at beg end))))
+  (dante-blocking-call 'backend (dante-format-get-type-at beg end)))
 
 (defun dante-get-type-at-async (cont beg end)
   "Call CONT with type of the region denoted by BEG and END.
@@ -578,20 +577,18 @@ type as arguments."
 (defun dante-get-info-of (thing)
   "Get info for THING."
   (let ((optimistic-result
-         (dante--kill-last-newline
           (dante-blocking-call
            'backend
-           (format ":i %s" thing)))))
+           (format ":i %s" thing))))
     (if (string-match "^<interactive>" optimistic-result)
         ;; Load the module Interpreted so that we get information
         (progn (dante-async-call 'backend ":set -fbyte-code")
                ;; ^^ Workaround for a bug of GHCi: info for external
                ;; ids can be gotten only so
                (dante-async-load-current-buffer)
-               (dante--kill-last-newline
-                (dante-blocking-call
-                 'backend
-                 (format ":i %s" thing))))
+               (dante-blocking-call
+                'backend
+                (format ":i %s" thing)))
       optimistic-result)))
 
 (defun dante--ghc-column-number-at-pos (pos)
@@ -599,7 +596,6 @@ type as arguments."
 
 (defun dante-get-loc-at (beg end)
   "Get the location of the identifier denoted by BEG and END."
-  (dante--kill-last-newline
    (dante-blocking-call
     'backend
     (format ":loc-at %S %d %d %d %d %S"
@@ -608,11 +604,10 @@ type as arguments."
             (dante--ghc-column-number-at-pos beg)
             (line-number-at-pos end)
             (dante--ghc-column-number-at-pos end)
-            (buffer-substring-no-properties beg end)))))
+            (buffer-substring-no-properties beg end))))
 
 (defun dante-get-uses-at (beg end)
   "Return usage list for identifier denoted by BEG and END."
-  (dante--kill-last-newline
    (dante-blocking-call
     'backend
     (format ":uses %S %d %d %d %d %S"
@@ -621,7 +616,7 @@ type as arguments."
             (dante--ghc-column-number-at-pos beg)
             (line-number-at-pos end)
             (dante--ghc-column-number-at-pos end)
-            (buffer-substring-no-properties beg end)))))
+            (buffer-substring-no-properties beg end))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Process communication
@@ -644,7 +639,7 @@ type as arguments."
      cmd
      (lambda (reply) (setq result reply)))
     (while (not result) (sleep-for 0.0001))
-    result))
+    (dante--kill-last-newline result)))
 
 (defun dante-buffer (worker)
   "Get the WORKER buffer for the current directory."
