@@ -119,20 +119,6 @@ a file or directory variable if the guess is wrong."
   (interactive)
   (dante-mode 1))
 
-;;;###autoload
-(define-minor-mode global-dante-mode
-  "Toggle Global dante mode on or off.
-With a prefix argument ARG, enable Global dante mode if ARG is
-positive, and disable it otherwise.  If called from Lisp, enable
-the mode if ARG is omitted or nil, and toggle it if ARG is ‘toggle’.
-
-If Global dante mode is on, `dante-mode' will be enabled in all
-haskell buffers."
-  :group 'dante
-  :global t
-  (funcall (if global-dante-mode #'add-hook #'remove-hook)
-           'haskell-mode-hook  #'turn-on-dante-mode))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Buffer-local variables/state
 
@@ -224,7 +210,7 @@ line as a type signature."
         (info (dante-get-info-of ident))
         (help-xref-following nil)
         (origin (buffer-name)))
-    (help-setup-xref (list #'dante-call-in-buffer origin-buffer 'dante-info ident)
+    (help-setup-xref (list #'dante-call-in-buffer origin-buffer #'dante-info ident)
                      (called-interactively-p 'interactive))
     (save-excursion
       (let ((help-xref-following nil))
@@ -281,10 +267,7 @@ If not provided, WORKER defaults to the current worker process."
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (dante-gave-up 'backend)
-      (run-with-timer 0
-                      nil
-                      cont
-                      'interrupted)
+      (run-with-timer 0 nil cont 'interrupted)
     (let ((file-buffer (current-buffer)))
       (dante-async-load-current-buffer
        (lambda (string)
@@ -562,6 +545,7 @@ x:\\foo\\bar (i.e., Windows)."
 
 (defun dante-get-type-at (beg end)
   "Get the type at the given region denoted by BEG and END."
+  (dante-async-call 'backend ":set -fobject-code")
   (dante-async-load-current-buffer)
   (dante--kill-last-newline
    (dante-blocking-call 'backend (dante-format-get-type-at beg end))))
@@ -599,18 +583,11 @@ type as arguments."
            'backend
            (format ":i %s" thing)))))
     (if (string-match "^<interactive>" optimistic-result)
-        ;; Load the module Interpreted so that we get information,
-        ;; then restore bytecode.
-        (progn (dante-async-call
-                'backend
-                ":set -fbyte-code")
-               (set-buffer-modified-p t)
-               (save-buffer)
-               (unless (member 'save flycheck-check-syntax-automatically)
-                 (dante-async-load-current-buffer))
-               (dante-async-call
-                'backend
-                ":set -fobject-code")
+        ;; Load the module Interpreted so that we get information
+        (progn (dante-async-call 'backend ":set -fbyte-code")
+               ;; ^^ Workaround for a bug of GHCi: info for external
+               ;; ids can be gotten only so
+               (dante-async-load-current-buffer)
                (dante--kill-last-newline
                 (dante-blocking-call
                  'backend
