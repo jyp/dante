@@ -92,15 +92,17 @@ a file or directory variable if the guess is wrong."
 (defvar dante-mode-map (make-sparse-keymap)
   "Dante minor mode's map.")
 
-(defvar-local dante-lighter " Dante"
-  "Lighter for the dante minor mode.")
+(defun dante-lighter ()
+  "Lighter for the dante minor mode."
+  (let ((buffer (dante-buffer-p)))
+    (concat " Dante:" (if buffer (symbol-name (buffer-local-value 'dante-state buffer)) "-"))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
   "Minor mode for Dante
 
 \\{dante-mode-map}"
-  :lighter dante-lighter
+  :lighter (:eval (dante-lighter))
   :keymap dante-mode-map
   (when (bound-and-true-p interactive-haskell-mode)
     (when (fboundp 'interactive-haskell-mode)
@@ -135,26 +137,16 @@ LIST is a FIFO.")
 (defvar-local dante-package-name nil
   "The package name associated with the current buffer.")
 
-;; (defvar-local dante-state nil
-;;   "nil: initial state
-;; - starting: GHCi starting
-;; - running: GHCi running
-;; - deleting: The process of the buffer is being deleted.
-;; - dead: GHCi died on its own. Do not try restarting
-;; automatically. The user will have to manually run `dante-restart'
-;; or `dante-targets' to destroy the buffer and create a fresh one
-;; without this variable enabled.
-;;   ")
-
-(defvar-local dante-deleting nil
-  "The process of the buffer is being deleted.")
-
-(defvar-local dante-give-up nil
-  "When non-nil, give up trying to start GHCi.
-A true value indicates that the backend could not start.  The
-user will have to manually run `dante-restart' or `dante-targets'
-to destroy the buffer and create a fresh one without this
-variable enabled.")
+(defvar-local dante-state nil
+  "nil: initial state
+- starting: GHCi starting
+- running: GHCi running
+- deleting: The process of the buffer is being deleted.
+- dead: GHCi died on its own. Do not try restarting
+automatically. The user will have to manually run `dante-restart'
+or `dante-targets' to destroy the buffer and create a fresh one
+without this variable enabled.
+  ")
 
 (defvar-local dante-starting nil
   "When non-nil, indicates that the dante process starting up.")
@@ -614,9 +606,9 @@ type as arguments."
   "Stop GHCi and kill its associated process buffer."
   (interactive)
   (when (dante-buffer-p)
-    (with-current-buffer (dante-get-buffer-create )
+    (with-current-buffer (dante-get-buffer-create)
       (when (get-buffer-process (current-buffer))
-        (setq dante-deleting t)
+        (setq dante-state 'deleting)
         (kill-process (get-buffer-process (current-buffer)))
         (delete-process (get-buffer-process (current-buffer))))
       (kill-buffer (current-buffer)))))
@@ -665,7 +657,7 @@ If provided, use the specified TARGETS and SOURCE-BUFFER."
 (defun dante-start-process-in-buffer (buffer &optional targets source-buffer)
   "Start a Dante worker in BUFFER, for the default or specified TARGETS.
 Automatically performs initial actions in SOURCE-BUFFER, if specified."
-  (if (buffer-local-value 'dante-give-up buffer)
+  (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
     (let* ((args (dante-command-line (list "cabal" "repl")))
            (process (with-current-buffer buffer
@@ -681,11 +673,11 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
         (erase-buffer)
         (setq dante-arguments args)
         (setq dante-targets targets)
-        (setq dante-starting t)
+        (setq dante-state 'starting)
         (setq dante-callbacks
               (list (list (lambda (_msg)
                               (with-current-buffer buffer
-                                (setq-local dante-starting nil))
+                                (setq-local dante-state 'runnig))
                               (when source-buffer
                                 (with-current-buffer source-buffer
                                   (when flycheck-mode
@@ -736,9 +728,9 @@ This is a standard process sentinel function."
   (when (buffer-live-p (process-buffer process))
     (when (not (process-live-p process))
       (let ((buffer (process-buffer process)))
-        (if (with-current-buffer buffer dante-deleting)
+        (if (eq (buffer-local-value 'dante-state buffer) 'deleting)
             (message "Dante process deleted.")
-            (progn (with-current-buffer buffer (setq-local dante-give-up t))
+            (progn (with-current-buffer buffer (setq dante-state 'dead))
                    (dante-show-process-problem process change)))))))
 
 (defun dante-show-process-problem (process change)
@@ -826,7 +818,7 @@ Uses the directory of the current buffer for context."
   "Return non-nil if starting GHCi failed."
   (and (dante-buffer-p)
        (let ((buffer (get-buffer (dante-buffer-name))))
-         (buffer-local-value 'dante-give-up buffer))))
+         (eq (buffer-local-value 'dante-state buffer) 'dead))))
 
 (defun dante-buffer-p ()
   "Return non-nil if a GHCi buffer exists."
