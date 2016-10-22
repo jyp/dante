@@ -677,14 +677,15 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
         (setq dante-callbacks
               (list (list (lambda (_msg)
                               (with-current-buffer buffer
-                                (setq-local dante-state 'runnig))
+                                (setq-local dante-state 'running))
                               (when source-buffer
                                 (with-current-buffer source-buffer
                                   (when flycheck-mode
+                                    ;; TODO: is this necessary?
                                     (run-with-timer 0 nil
                                                     'dante-call-in-buffer
                                                     (current-buffer)
-                                                    'dante-flycheck-buffer))))
+                                                    'flycheck-buffer))))
                               (message "GHCi started!"))))))
       (set-process-filter
        process
@@ -699,7 +700,7 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
       (set-process-sentinel process 'dante-sentinel)
       buffer)))
 
-(defun dante-async-call ( cmd &optional callback)
+(defun dante-async-call (cmd &optional callback)
   "Send GHCi the command string CMD.
 The result is passed to CALLBACK as (CALLBACK REPLY)."
   (let ((buffer (dante-buffer )))
@@ -713,14 +714,6 @@ The result is passed to CALLBACK as (CALLBACK REPLY)."
                  (message "[Dante] -> %s" cmd))
                (comint-simple-send (dante-process ) cmd))
       (error "Dante process is not running: run M-x dante-restart to start it"))))
-
-
-(defun dante-flycheck-buffer ()
-  "Run flycheck in the buffer.
-Restarts flycheck in case there was a problem and flycheck is stuck."
-  (flycheck-mode -1)
-  (flycheck-mode)
-  (flycheck-buffer))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
