@@ -613,7 +613,7 @@ type as arguments."
       (kill-buffer (current-buffer)))))
 
 (defun dante-blocking-call ( cmd)
-  "Send WORKER the command string CMD and block pending its result."
+  "Send GHCi the command string CMD and block pending its result."
   (let ((result nil))
     (dante-async-call
      
@@ -623,18 +623,18 @@ type as arguments."
     (dante--kill-last-newline result)))
 
 (defun dante-buffer ()
-  "Get the WORKER buffer for the current directory."
+  "Get the GHCi buffer for the current directory."
   (let ((buffer (dante-get-buffer-create )))
     (if (get-buffer-process buffer)
         buffer
       (dante-get-worker-create  nil (current-buffer)))))
 
 (defun dante-process ()
-  "Get the WORKER process for the current directory."
+  "Get the GHCi process for the current directory."
   (get-buffer-process (dante-buffer )))
 
 (defun dante-get-worker-create ( &optional targets source-buffer)
-  "Start the given WORKER.
+  "Start GHCi.
 If provided, use the specified TARGETS and SOURCE-BUFFER."
   (let* ((buffer (dante-get-buffer-create )))
     (if (get-buffer-process buffer)
@@ -699,7 +699,7 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
       buffer)))
 
 (defun dante-async-call ( cmd &optional callback)
-  "Send WORKER the command string CMD.
+  "Send GHCi the command string CMD.
 The result is passed to CALLBACK as (CALLBACK STATE REPLY)."
   (let ((buffer (dante-buffer )))
     (if (and buffer (process-live-p (get-buffer-process buffer)))
@@ -803,7 +803,7 @@ You can always run M-x dante-restart to make it try again.
   (replace-regexp-in-string "\r" "" string))
 
 (defun dante-get-buffer-create ()
-  "Get or create the stack buffer for WORKER.
+  "Get or create the stack buffer for GHCi.
 Uses the directory of the current buffer for context."
   (let* ((root (dante-project-root))
          (cabal-file (dante-cabal-find-file))
@@ -821,13 +821,13 @@ Uses the directory of the current buffer for context."
       (current-buffer))))
 
 (defun dante-gave-up ()
-  "Return non-nil if starting WORKER or installing dante failed."
+  "Return non-nil if starting GHCi failed."
   (and (dante-buffer-p)
        (let ((buffer (get-buffer (dante-buffer-name))))
          (buffer-local-value 'dante-give-up buffer))))
 
 (defun dante-buffer-p ()
-  "Return non-nil if a Dante buffer exists."
+  "Return non-nil if a GHCi buffer exists."
   (get-buffer (dante-buffer-name)))
 
 (defun dante-buffer-name ()
