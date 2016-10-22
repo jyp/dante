@@ -132,9 +132,6 @@ LIST is a FIFO.")
 (defvar-local dante-targets (list)
   "Targets used for the stack process.")
 
-(defvar-local dante-source-buffer (list)
-  "Buffer from which Dante was first requested to start.")
-
 (defvar-local dante-package-name nil
   "The package name associated with the current buffer.")
 
@@ -675,7 +672,6 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
         (erase-buffer)
         (setq dante-arguments args)
         (setq dante-targets targets)
-        (setq dante-source-buffer source-buffer)
         (setq dante-starting t)
         (setq dante-callbacks
               (list (list (lambda (_msg)
