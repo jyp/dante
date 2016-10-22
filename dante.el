@@ -543,7 +543,6 @@ CONT is called within the current buffer, with BEG, END and the
 type as arguments."
   (let ((source-buffer (current-buffer)))
   (dante-async-call
-   
    (dante-format-get-type-at beg end)
    (lambda (reply)
      (with-current-buffer source-buffer
@@ -566,7 +565,6 @@ type as arguments."
   "Get info for THING."
   (let ((optimistic-result
           (dante-blocking-call
-           
            (format ":i %s" thing))))
     (if (string-match "^<interactive>" optimistic-result)
         ;; Load the module Interpreted so that we get information
@@ -575,7 +573,6 @@ type as arguments."
                ;; ids can be gotten only so
                (dante-async-load-current-buffer)
                (dante-blocking-call
-                
                 (format ":i %s" thing)))
       optimistic-result)))
 
@@ -585,7 +582,6 @@ type as arguments."
 (defun dante-get-loc-at (beg end)
   "Get the location of the identifier denoted by BEG and END."
    (dante-blocking-call
-    
     (format ":loc-at %S %d %d %d %d %S"
             (dante-temp-file-name)
             (line-number-at-pos beg)
@@ -597,7 +593,6 @@ type as arguments."
 (defun dante-get-uses-at (beg end)
   "Return usage list for identifier denoted by BEG and END."
    (dante-blocking-call
-    
     (format ":uses %S %d %d %d %d %S"
             (dante-temp-file-name)
             (line-number-at-pos beg)
