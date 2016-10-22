@@ -143,10 +143,10 @@ LIST is a FIFO.")
 
 (defvar-local dante-give-up nil
   "When non-nil, give up trying to start the backend.
-A true value indicates that the backend could not start, or could
-not be installed.  The user will have to manually run
-`dante-restart' or `dante-targets' to destroy the buffer and
-create a fresh one without this variable enabled.")
+A true value indicates that the backend could not start.  The
+user will have to manually run `dante-restart' or `dante-targets'
+to destroy the buffer and create a fresh one without this
+variable enabled.")
 
 (defvar-local dante-starting nil
   "When non-nil, indicates that the dante process starting up.")
@@ -195,11 +195,10 @@ line as a type signature."
         (save-excursion
           (goto-char (line-beginning-position))
           (insert (dante-fontify-expression ty) "\n"))
-      (message
-       "%s" (dante-fontify-expression ty)))))
+      (message "%s" (dante-fontify-expression ty)))))
 
 (defun dante-info (ident)
-  "Get the info of the thing with IDENT at point."
+  "Get the info about the IDENT at point."
   (interactive (list (dante-ident-at-point)))
   (let ((origin-buffer (current-buffer))
         (package (dante-package-name))
