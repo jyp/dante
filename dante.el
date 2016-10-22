@@ -2,9 +2,9 @@
 
 ;; DANTE: Do Not Aim To Expand.
 
-;; This is a mode for GHCi advanced "IDE" features, which does not aim
-;; to add other dependencies. It aims to be minimal as far as
-;; possible.
+;; This is a mode for GHCi advanced "IDE" features. The mode depends
+;; on GHCi only, keeping the logic simple. Additionally it aims to be
+;; minimal as far as possible.
 
 ;; Copyright (c) 2016 Jean-Philippe Bernardy
 ;; Copyright (c) 2016 Chris Done
@@ -135,11 +135,22 @@ LIST is a FIFO.")
 (defvar-local dante-package-name nil
   "The package name associated with the current buffer.")
 
+;; (defvar-local dante-state nil
+;;   "nil: initial state
+;; - starting: GHCi starting
+;; - running: GHCi running
+;; - deleting: The process of the buffer is being deleted.
+;; - dead: GHCi died on its own. Do not try restarting
+;; automatically. The user will have to manually run `dante-restart'
+;; or `dante-targets' to destroy the buffer and create a fresh one
+;; without this variable enabled.
+;;   ")
+
 (defvar-local dante-deleting nil
   "The process of the buffer is being deleted.")
 
 (defvar-local dante-give-up nil
-  "When non-nil, give up trying to start the backend.
+  "When non-nil, give up trying to start GHCi.
 A true value indicates that the backend could not start.  The
 user will have to manually run `dante-restart' or `dante-targets'
 to destroy the buffer and create a fresh one without this
@@ -350,8 +361,7 @@ CHECKER and BUFFER are added to each item parsed from STRING."
 
 (defun dante-call-in-buffer (buffer func &rest args)
   "In BUFFER, call FUNC with ARGS."
-  (with-current-buffer buffer
-    (apply func args)))
+  (with-current-buffer buffer (apply func args)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ELDoc integration
@@ -432,8 +442,7 @@ Returns one of the following symbols:
 (defun dante-thing-at-point ()
   "Return (list START END) of something at the point."
   (if (region-active-p)
-      (list (region-beginning)
-            (region-end))
+      (list (region-beginning) (region-end))
     (let ((pos (dante-ident-pos-at-point)))
       (if pos
           (list (car pos) (cdr pos))
@@ -661,12 +670,12 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
     (let* ((args (dante-command-line (list "cabal" "repl")))
            (process (with-current-buffer buffer
                       (when dante-debug
-                        (message "Dante command line: %s" (combine-and-quote-strings args)))
+                        (message "GHCi command line: %s" (combine-and-quote-strings args)))
                       (message "Booting up dante ...")
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (process-send-string process ":set +c\n") ;; collect type info
-      (dante-async-call  ":set -fobject-code") ;; so that compilation results are cached
+      (process-send-string process ":set -fobject-code\n") ;; so that compilation results are cached
       (process-send-string process ":set prompt \"\\4\"\n")
       (with-current-buffer buffer
         (erase-buffer)
@@ -700,7 +709,7 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
 
 (defun dante-async-call ( cmd &optional callback)
   "Send GHCi the command string CMD.
-The result is passed to CALLBACK as (CALLBACK STATE REPLY)."
+The result is passed to CALLBACK as (CALLBACK REPLY)."
   (let ((buffer (dante-buffer )))
     (if (and buffer (process-live-p (get-buffer-process buffer)))
         (progn (with-current-buffer buffer
@@ -731,13 +740,6 @@ This is a standard process sentinel function."
             (message "Dante process deleted.")
             (progn (with-current-buffer buffer (setq-local dante-give-up t))
                    (dante-show-process-problem process change)))))))
-
-(defun dante-unsatisfied-package-p (buffer)
-  "Return non-nil if BUFFER contain GHCi's unsatisfied package complaint."
-  (with-current-buffer buffer
-    (save-excursion
-      (goto-char (point-min))
-      (search-forward-regexp "cannot satisfy -package" nil t 1))))
 
 (defun dante-show-process-problem (process change)
   "Report to the user that PROCESS reported CHANGE, causing it to end."
