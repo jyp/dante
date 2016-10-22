@@ -224,44 +224,43 @@ line as a type signature."
 (defun dante-restart ()
   "Simply restart the process with the same configuration as before."
   (interactive)
-  (when (dante-buffer-p 'backend)
-    (let ((targets (with-current-buffer (dante-buffer 'backend)
+  (when (dante-buffer-p)
+    (let ((targets (with-current-buffer (dante-buffer )
                      dante-targets)))
-      (dante-destroy 'backend)
-      (dante-get-worker-create 'backend targets (current-buffer)))))
+      (dante-destroy )
+      (dante-get-worker-create  targets (current-buffer)))))
 
 (defun dante-targets ()
-  "Set the targets to use for cabal repl"
+  "Set the targets to use for cabal repl."
   (interactive)
   (let* ((old-targets
-          (with-current-buffer (dante-buffer 'backend)
+          (with-current-buffer (dante-buffer )
             dante-targets))
          (targets (split-string (read-from-minibuffer "Targets: " nil nil nil nil old-targets)
                                 " "
                                 t)))
     (dante-destroy)
-    (dante-get-worker-create 'backend targets (current-buffer))))
+    (dante-get-worker-create  targets (current-buffer))))
 
-(defun dante-destroy (&optional worker)
+(defun dante-destroy ()
   "Stop WORKER and kill its associated process buffer.
 If not provided, WORKER defaults to the current worker process."
   (interactive)
-  (if worker
-      (dante-delete-worker worker)
-    (dante-delete-worker 'backend)))
+  (dante-delete-worker)) ;; CLEAN
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
 
 (defun dante-async-load-current-buffer (&optional cont)
-  (dante-async-call 'backend (concat ":l *" (dante-temp-file-name)) cont)
+  "Load (interpreted) the temp buffer and run CONT."
+  (dante-async-call  (concat ":l *" (dante-temp-file-name)) cont)
   ;; Note the * so that we collect the type info for the current
   ;; module (also, probably faster.)
 )
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
-  (if (dante-gave-up 'backend)
+  (if (dante-gave-up)
       (run-with-timer 0 nil cont 'interrupted)
     (let ((file-buffer (current-buffer)))
       (dante-async-load-current-buffer
@@ -540,9 +539,9 @@ x:\\foo\\bar (i.e., Windows)."
 
 (defun dante-get-type-at (beg end)
   "Get the type at the given region denoted by BEG and END."
-  (dante-async-call 'backend ":set -fobject-code")
+  (dante-async-call  ":set -fobject-code")
   (dante-async-load-current-buffer)
-  (dante-blocking-call 'backend (dante-format-get-type-at beg end)))
+  (dante-blocking-call  (dante-format-get-type-at beg end)))
 
 (defun dante-get-type-at-async (cont beg end)
   "Call CONT with type of the region denoted by BEG and END.
@@ -550,7 +549,7 @@ CONT is called within the current buffer, with BEG, END and the
 type as arguments."
   (let ((source-buffer (current-buffer)))
   (dante-async-call
-   'backend
+   
    (dante-format-get-type-at beg end)
    (lambda (reply)
      (with-current-buffer source-buffer
@@ -573,16 +572,16 @@ type as arguments."
   "Get info for THING."
   (let ((optimistic-result
           (dante-blocking-call
-           'backend
+           
            (format ":i %s" thing))))
     (if (string-match "^<interactive>" optimistic-result)
         ;; Load the module Interpreted so that we get information
-        (progn (dante-async-call 'backend ":set -fbyte-code")
+        (progn (dante-async-call  ":set -fbyte-code")
                ;; ^^ Workaround for a bug of GHCi: info for external
                ;; ids can be gotten only so
                (dante-async-load-current-buffer)
                (dante-blocking-call
-                'backend
+                
                 (format ":i %s" thing)))
       optimistic-result)))
 
@@ -592,7 +591,7 @@ type as arguments."
 (defun dante-get-loc-at (beg end)
   "Get the location of the identifier denoted by BEG and END."
    (dante-blocking-call
-    'backend
+    
     (format ":loc-at %S %d %d %d %d %S"
             (dante-temp-file-name)
             (line-number-at-pos beg)
@@ -604,7 +603,7 @@ type as arguments."
 (defun dante-get-uses-at (beg end)
   "Return usage list for identifier denoted by BEG and END."
    (dante-blocking-call
-    'backend
+    
     (format ":uses %S %d %d %d %d %S"
             (dante-temp-file-name)
             (line-number-at-pos beg)
@@ -616,41 +615,41 @@ type as arguments."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Process communication
 
-(defun dante-delete-worker (worker)
+(defun dante-delete-worker ()
   "Delete the given WORKER."
-  (when (dante-buffer-p worker)
-    (with-current-buffer (dante-get-buffer-create worker)
+  (when (dante-buffer-p)
+    (with-current-buffer (dante-get-buffer-create )
       (when (get-buffer-process (current-buffer))
         (setq dante-deleting t)
         (kill-process (get-buffer-process (current-buffer)))
         (delete-process (get-buffer-process (current-buffer))))
       (kill-buffer (current-buffer)))))
 
-(defun dante-blocking-call (worker cmd)
+(defun dante-blocking-call ( cmd)
   "Send WORKER the command string CMD and block pending its result."
   (let ((result nil))
     (dante-async-call
-     worker
+     
      cmd
      (lambda (reply) (setq result reply)))
     (while (not result) (sleep-for 0.0001))
     (dante--kill-last-newline result)))
 
-(defun dante-buffer (worker)
+(defun dante-buffer ()
   "Get the WORKER buffer for the current directory."
-  (let ((buffer (dante-get-buffer-create worker)))
+  (let ((buffer (dante-get-buffer-create )))
     (if (get-buffer-process buffer)
         buffer
-      (dante-get-worker-create worker nil (current-buffer)))))
+      (dante-get-worker-create  nil (current-buffer)))))
 
-(defun dante-process (worker)
+(defun dante-process ()
   "Get the WORKER process for the current directory."
-  (get-buffer-process (dante-buffer worker)))
+  (get-buffer-process (dante-buffer )))
 
-(defun dante-get-worker-create (worker &optional targets source-buffer)
+(defun dante-get-worker-create ( &optional targets source-buffer)
   "Start the given WORKER.
 If provided, use the specified TARGETS and SOURCE-BUFFER."
-  (let* ((buffer (dante-get-buffer-create worker)))
+  (let* ((buffer (dante-get-buffer-create )))
     (if (get-buffer-process buffer)
         buffer
       (dante-start-process-in-buffer buffer targets source-buffer))))
@@ -680,7 +679,7 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (process-send-string process ":set +c\n") ;; collect type info
-      (dante-async-call 'backend ":set -fobject-code") ;; so that compilation results are cached
+      (dante-async-call  ":set -fobject-code") ;; so that compilation results are cached
       (process-send-string process ":set prompt \"\\4\"\n")
       (with-current-buffer buffer
         (erase-buffer)
@@ -713,10 +712,10 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
       (set-process-sentinel process 'dante-sentinel)
       buffer)))
 
-(defun dante-async-call (worker cmd &optional callback)
+(defun dante-async-call ( cmd &optional callback)
   "Send WORKER the command string CMD.
 The result is passed to CALLBACK as (CALLBACK STATE REPLY)."
-  (let ((buffer (dante-buffer worker)))
+  (let ((buffer (dante-buffer )))
     (if (and buffer (process-live-p (get-buffer-process buffer)))
         (progn (with-current-buffer buffer
                  (setq dante-callbacks
@@ -725,7 +724,7 @@ The result is passed to CALLBACK as (CALLBACK STATE REPLY)."
                                            cmd)))))
                (when dante-debug
                  (message "[Dante] -> %s" cmd))
-               (comint-simple-send (dante-process worker) cmd))
+               (comint-simple-send (dante-process ) cmd))
       (error "Dante process is not running: run M-x dante-restart to start it"))))
 
 
@@ -817,7 +816,7 @@ You can always run M-x dante-restart to make it try again.
   "Strip the \\r from Windows \\r\\n line endings in STRING."
   (replace-regexp-in-string "\r" "" string))
 
-(defun dante-get-buffer-create (worker)
+(defun dante-get-buffer-create ()
   "Get or create the stack buffer for WORKER.
 Uses the directory of the current buffer for context."
   (let* ((root (dante-project-root))
@@ -825,7 +824,7 @@ Uses the directory of the current buffer for context."
          (package-name (if cabal-file
                            (dante-package-name cabal-file)
                          ""))
-         (buffer-name (dante-buffer-name worker))
+         (buffer-name (dante-buffer-name))
          (default-directory (if cabal-file
                                 (file-name-directory cabal-file)
                               root)))
@@ -835,23 +834,21 @@ Uses the directory of the current buffer for context."
       (cd default-directory)
       (current-buffer))))
 
-(defun dante-gave-up (worker)
+(defun dante-gave-up ()
   "Return non-nil if starting WORKER or installing dante failed."
-  (and (dante-buffer-p worker)
-       (let ((buffer (get-buffer (dante-buffer-name worker))))
+  (and (dante-buffer-p)
+       (let ((buffer (get-buffer (dante-buffer-name))))
          (buffer-local-value 'dante-give-up buffer))))
 
-(defun dante-buffer-p (worker)
-  "Return non-nil if a buffer exists for WORKER."
-  (get-buffer (dante-buffer-name worker)))
+(defun dante-buffer-p ()
+  "Return non-nil if a Dante buffer exists."
+  (get-buffer (dante-buffer-name)))
 
-(defun dante-buffer-name (worker)
-  "For a given WORKER, create a buffer name."
+(defun dante-buffer-name ()
+  "Create a dante process buffer name."
   (let* ((root (dante-project-root))
          (package-name (dante-package-name)))
     (concat " dante:"
-            (format "%s" worker)
-            ":"
             package-name
             " "
             root)))
@@ -933,7 +930,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
   (dante-ident-at-point))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
-  (dante-async-call 'backend (concat ":l " (dante-temp-file-name)))
+  (dante-async-call  (concat ":l " (dante-temp-file-name)))
   (let ((result (apply #'dante-get-loc-at (dante-thing-at-point))))
     (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
                         result)
