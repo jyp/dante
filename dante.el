@@ -242,12 +242,6 @@ line as a type signature."
     (dante-destroy)
     (dante-get-worker-create  targets (current-buffer))))
 
-(defun dante-destroy ()
-  "Stop WORKER and kill its associated process buffer.
-If not provided, WORKER defaults to the current worker process."
-  (interactive)
-  (dante-delete-worker)) ;; CLEAN
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
 
@@ -615,8 +609,9 @@ type as arguments."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Process communication
 
-(defun dante-delete-worker ()
-  "Delete the given WORKER."
+(defun dante-destroy ()
+  "Stop GHCi and kill its associated process buffer."
+  (interactive)
   (when (dante-buffer-p)
     (with-current-buffer (dante-get-buffer-create )
       (when (get-buffer-process (current-buffer))
