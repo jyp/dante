@@ -380,22 +380,22 @@ instead of using `eldoc-documentation-function'."
 
 (defun eldoc-dante ()
   "ElDoc backend for dante."
-  (apply #'dante-get-type-at-async
-         (lambda (beg end ty)
+  (let ((pos (dante-thing-at-point)))
+    (when pos
+      (dante-get-type-at-async
+         (lambda (ty)
            (let ((response-status (dante-haskell-utils-repl-response-error-status ty)))
              (if (eq 'no-error response-status)
                (let ((msg (dante-fontify-expression
                            (replace-regexp-in-string "[ \n]+" " " ty))))
                  ;; Got an updated type-at-point, cache and print now:
-                 (puthash (list beg end)
-                          msg
-                          eldoc-dante-cache)
+                 (puthash pos msg eldoc-dante-cache)
                  (eldoc-dante-maybe-print msg))
                ;; But if we're seeing errors, invalidate cache-at-point:
-               (remhash (list beg end) eldoc-dante-cache))))
-         (dante-thing-at-point))
+               (remhash pos eldoc-dante-cache))))
+         pos)
   ;; If we have something cached at point, print that first:
-  (gethash (dante-thing-at-point) eldoc-dante-cache))
+  (gethash pos eldoc-dante-cache))))
 
 (defun dante-haskell-utils-repl-response-error-status (response)
   "Parse response REPL's RESPONSE for errors.
@@ -437,17 +437,14 @@ Returns one of the following symbols:
   "Return (list START END) of something at the point."
   (if (region-active-p)
       (list (region-beginning) (region-end))
-    (let ((pos (dante-ident-pos-at-point)))
-      (if pos
-          (list (car pos) (cdr pos))
-        (list (point) (point))))))
+    (dante-ident-pos-at-point)))
 
 (defun dante-ident-at-point ()
   "Return the identifier under point, or nil if none found.
 May return a qualified name."
   (let ((reg (dante-ident-pos-at-point)))
     (when reg
-      (buffer-substring-no-properties (car reg) (cdr reg)))))
+      (buffer-substring-no-properties (car reg) (cadr reg)))))
 
 (defun dante-ident-pos-at-point ()
   "Return the span of the identifier under point, or nil if none found.
@@ -486,7 +483,7 @@ May return a qualified name."
           (setq start (point)))
         ;; This is it.
         (unless (= start end)
-          (cons start end))))))
+          (list start end))))))
 
 (defun dante-buffer-file-name (&optional buffer)
   "Call function `buffer-file-name' for BUFFER and clean its result.
@@ -535,17 +532,15 @@ x:\\foo\\bar (i.e., Windows)."
   "Get the type at the given region denoted by BEG and END."
   (dante-async-call  ":set -fobject-code")
   (dante-async-load-current-buffer)
-  (dante-blocking-call  (dante-format-get-type-at beg end)))
+  (dante-blocking-call (dante-format-get-type-at beg end)))
 
-(defun dante-get-type-at-async (cont beg end)
-  "Call CONT with type of the region denoted by BEG and END.
-CONT is called within the current buffer, with BEG, END and the
+(defun dante-get-type-at-async (cont reg)
+  "Call CONT with type of the region denoted by REG.
+CONT is called within the current buffer, with the
 type as arguments."
   (dante-async-call
-   (dante-format-get-type-at beg end)
-   (lambda (reply)
-       (funcall cont beg end
-                (dante--kill-last-newline reply)))))
+   (apply #'dante-format-get-type-at reg)
+   (lambda (reply) (funcall cont (dante--kill-last-newline reply)))))
 
 (defun dante-format-get-type-at (beg end)
   "Compose a request for getting types in region from BEG to END."
@@ -560,8 +555,7 @@ type as arguments."
 (defun dante-get-info-of (thing)
   "Get info for THING."
   (let ((optimistic-result
-          (dante-blocking-call
-           (format ":i %s" thing))))
+         (dante-blocking-call (format ":i %s" thing))))
     (if (string-match "^<interactive>" optimistic-result)
         ;; Load the module Interpreted so that we get information
         (progn (dante-async-call  ":set -fbyte-code")
@@ -611,7 +605,7 @@ type as arguments."
         (delete-process (get-buffer-process (current-buffer))))
       (kill-buffer (current-buffer)))))
 
-(defun dante-blocking-call ( cmd)
+(defun dante-blocking-call (cmd)
   "Send GHCi the command string CMD and block pending its result."
   (let ((result nil))
     (dante-async-call
@@ -816,10 +810,7 @@ Uses the directory of the current buffer for context."
   "Create a dante process buffer name."
   (let* ((root (dante-project-root))
          (package-name (dante-package-name)))
-    (concat " dante:"
-            package-name
-            " "
-            root)))
+    (concat " dante:" package-name " " root)))
 
 (defun dante-project-root ()
   "Get the directory where the .cabal file is placed."
@@ -899,7 +890,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (dante-async-call  (concat ":l " (dante-temp-file-name)))
-  (let ((result (apply #'dante-get-loc-at (dante-thing-at-point))))
+  (let ((result (apply #'dante-get-loc-at (dante-ident-pos-at-point))))
     (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
                         result)
       (let ((file (match-string 1 result))
