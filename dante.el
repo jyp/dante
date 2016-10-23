@@ -232,7 +232,7 @@ line as a type signature."
     (let ((targets (with-current-buffer (dante-buffer)
                      dante-targets)))
       (dante-destroy)
-      (dante-get-worker-create targets (current-buffer)))))
+      (dante-get-worker-create targets))))
 
 (defun dante-targets ()
   "Set the targets to use for cabal repl."
@@ -244,7 +244,7 @@ line as a type signature."
                                 " "
                                 t)))
     (dante-destroy)
-    (dante-get-worker-create  targets (current-buffer))))
+    (dante-get-worker-create targets)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
@@ -260,19 +260,17 @@ line as a type signature."
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-state) 'dead)
       (run-with-timer 0 nil cont 'interrupted)
-    (let ((file-buffer (current-buffer)))
-      (dante-async-load-current-buffer
-       (lambda (string)
-         (with-current-buffer file-buffer
-           (let ((msgs (dante-parse-errors-warnings-splices
-                        checker
-                        (current-buffer)
-                        string)))
-             (funcall cont
-                      'finished
-                      (cl-remove-if (lambda (msg)
-                                      (eq 'splice (flycheck-error-level msg)))
-                                    msgs)))))))))
+    (dante-async-load-current-buffer
+     (lambda (string)
+       (let ((msgs (dante-parse-errors-warnings-splices
+                    checker
+                    (current-buffer)
+                    string)))
+         (funcall cont
+                  'finished
+                  (cl-remove-if (lambda (msg)
+                                  (eq 'splice (flycheck-error-level msg)))
+                                msgs)))))))
 
 (flycheck-define-generic-checker 'dante
   "A syntax and type checker for Haskell using a Dante worker
@@ -543,15 +541,11 @@ x:\\foo\\bar (i.e., Windows)."
   "Call CONT with type of the region denoted by BEG and END.
 CONT is called within the current buffer, with BEG, END and the
 type as arguments."
-  (let ((source-buffer (current-buffer)))
   (dante-async-call
    (dante-format-get-type-at beg end)
    (lambda (reply)
-     (with-current-buffer source-buffer
-       (funcall cont
-                beg
-                end
-                (dante--kill-last-newline reply)))))))
+       (funcall cont beg end
+                (dante--kill-last-newline reply)))))
 
 (defun dante-format-get-type-at (beg end)
   "Compose a request for getting types in region from BEG to END."
@@ -628,22 +622,22 @@ type as arguments."
 
 (defun dante-buffer ()
   "Get the GHCi buffer for the current directory."
-  (let ((buffer (dante-get-buffer-create )))
+  (let ((buffer (dante-get-buffer-create)))
     (if (get-buffer-process buffer)
         buffer
-      (dante-get-worker-create  nil (current-buffer)))))
+      (dante-get-worker-create nil))))
 
 (defun dante-process ()
   "Get the GHCi process for the current directory."
   (get-buffer-process (dante-buffer )))
 
-(defun dante-get-worker-create (&optional targets source-buffer)
-  "Start GHCi.
-If provided, use the specified TARGETS and SOURCE-BUFFER."
+(defun dante-get-worker-create (&optional targets)
+  "Start a GHCi session suitable for the current (source) buffer.
+If provided, use the specified TARGETS."
   (let* ((buffer (dante-get-buffer-create)))
     (if (get-buffer-process buffer)
         buffer
-      (dante-start-process-in-buffer buffer targets source-buffer))))
+      (dante-start-process-in-buffer buffer targets (current-buffer)))))
 
 (defun dante-environment ()
   "Return environment for dante.
@@ -660,9 +654,9 @@ See variable dante-environment."
     (nix (list "nix-shell" "--run" (combine-and-quote-strings cmd)))
     (bare cmd)))
 
-(defun dante-start-process-in-buffer (buffer &optional targets source-buffer)
+(defun dante-start-process-in-buffer (buffer targets source-buffer)
   "Start a Dante worker in BUFFER, for the default or specified TARGETS.
-Automatically performs initial actions in SOURCE-BUFFER, if specified."
+Automatically performs initial actions in SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
     (let* ((args (dante-command-line (list "cabal" "repl")))
@@ -681,17 +675,17 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
         (setq dante-targets targets)
         (setq dante-state 'starting)
         (setq dante-callbacks
-              (list (list (lambda (_msg)
+              (list (list
+                     :source-buffer source-buffer
+                     :func (lambda (_msg)
                               (with-current-buffer buffer
                                 (setq-local dante-state 'running))
-                              (when source-buffer
-                                (with-current-buffer source-buffer
-                                  (when flycheck-mode
-                                    ;; TODO: is this necessary?
-                                    (run-with-timer 0 nil
-                                                    'dante-call-in-buffer
-                                                    (current-buffer)
-                                                    'flycheck-buffer))))
+                              (when flycheck-mode
+                                ;; TODO: is this necessary?
+                                (run-with-timer 0 nil
+                                                'dante-call-in-buffer
+                                                (current-buffer)
+                                                'flycheck-buffer))
                               (message "GHCi started!"))))))
       (set-process-filter
        process
@@ -709,16 +703,18 @@ Automatically performs initial actions in SOURCE-BUFFER, if specified."
 (defun dante-async-call (cmd &optional callback)
   "Send GHCi the command string CMD.
 The result is passed to CALLBACK as (CALLBACK REPLY)."
-  (let ((buffer (dante-buffer )))
+  (let ((source-buffer (current-buffer))
+        (buffer (dante-buffer)))
     (if (and buffer (process-live-p (get-buffer-process buffer)))
         (progn (with-current-buffer buffer
                  (setq dante-callbacks
                        (append dante-callbacks
-                               (list (list (or callback #'ignore)
-                                           cmd)))))
+                               (list (list :func (or callback #'ignore)
+                                           :source-buffer source-buffer
+                                           :cmd cmd)))))
                (when dante-debug
                  (message "[Dante] -> %s" cmd))
-               (comint-simple-send (dante-process ) cmd))
+               (comint-simple-send (dante-process) cmd))
       (error "Dante process is not running: run M-x dante-restart to start it"))))
 
 (defun dante-sentinel (process change)
@@ -779,13 +775,12 @@ You can always run M-x dante-restart to make it try again.
   "In the process buffer, we read what's in it."
   (goto-char (point-min))
   (when (search-forward "\4" (point-max) t 1)
-    (let* ((next-callback (pop dante-callbacks))
-           (func (nth 0 next-callback)))
+    (let ((callback (pop dante-callbacks)))
       (let ((string (dante--strip-carriage-returns (buffer-substring (point-min) (1- (point))))))
         (delete-region (point-min) (point))
-        (if next-callback
-            (progn (with-temp-buffer
-                     (funcall func string))
+        (if callback
+            (progn (with-current-buffer (plist-get callback :source-buffer)
+                     (funcall (plist-get callback :func) string))
                    (dante-read-buffer))
           (when dante-debug
             (dante--warn "Received output but no callback in `dante-callbacks': %S"
