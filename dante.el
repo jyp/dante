@@ -42,6 +42,7 @@
 ;; * Go to definition
 ;; * Type of selection
 ;; * Info
+;; * Apply ghc suggestions (C-c C-a on error at point)
 ;; TODO: * Find uses
 
 ;;; Code:
@@ -52,6 +53,7 @@
 (require 'cl-lib)
 (require 'comint)
 (require 'eldoc)
+(require 'dash)
 (eval-when-compile
   (require 'wid-edit))
 
@@ -114,6 +116,7 @@ a file or directory variable if the guess is wrong."
 
 (define-key dante-mode-map (kbd "C-c C-t") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c C-i") 'dante-info)
+(define-key dante-mode-map (kbd "C-c C-a") 'dante-auto-fix)
 
 (defun turn-on-dante-mode ()
   "Turn on Dante in the current buffer."
@@ -660,6 +663,7 @@ Automatically performs initial actions in SOURCE-BUFFER."
                       (message "Booting up dante ...")
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
+      (process-send-string process ":set -Wall\n")
       (process-send-string process ":set +c\n") ;; collect type info
       (process-send-string process ":set -fobject-code\n") ;; so that compilation results are cached
       (process-send-string process ":set prompt \"\\4\"\n")
@@ -888,6 +892,9 @@ Equivalent to 'warn', but label the warning as coming from dante."
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql dante)))
   (dante-ident-at-point))
 
+(cl-defmethod xref-backend-identifier-completion-table ((_backend (eql dante)))
+  nil)
+
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (dante-async-call  (concat ":l " (dante-temp-file-name)))
   (let ((result (apply #'dante-get-loc-at (dante-ident-pos-at-point))))
@@ -901,10 +908,57 @@ Equivalent to 'warn', but label the warning as coming from dante."
                                     line
                                     (1- col))))))))
 
+(cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
+  (dante-async-call  (concat ":l " (dante-temp-file-name)))
+  (let ((result (apply #'dante-get-uses-at (dante-ident-pos-at-point))))
+    (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
+                        result)
+      (let ((file (match-string 1 result))
+            (line (string-to-number (match-string 2 result)))
+            (col (string-to-number (match-string 3 result))))
+            (list (xref-make "ref" (xref-make-file-location
+                                    (if (string= file (dante-temp-file-name)) (buffer-file-name) file)
+                                    line
+                                    (1- col))))))))
+
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Auto-fix
+
+(defcustom dante-suggestible-extensions
+  '("MultiParamTypeClasses" "RankNTypes" "DeriveGeneric" "DeriveFunctor" "DeriveFoldable" "GADTs" "FlexibleContexts" "FlexibleInstances" "ViewPatterns" "RecordWildcards" "TypeOperators" "TypeFamilies" "FunctionalDependencies" "ScopedTypeVariables")
+  "Language extensions that Dante will use to fix errors."
+  :group 'dante
+  :type '(list string))
+
+(defun dante-auto-fix (pos)
+  "Attempt to fix the flycheck error at POS."
+  (interactive "d")
+  (let ((messages (delq nil (mapcar #'flycheck-error-message
+                                    (flycheck-overlay-errors-at pos)))))
+    (when messages
+      (let ((msg (car messages)))
+        (save-excursion
+          (cond
+           ((string-match "Top-level binding with no type signature:[\n ]*" msg)
+            (beginning-of-line)
+            (insert (concat (substring msg (match-end 0)) "\n")))
+           ((string-match "The import of ‘.*’ is redundant" msg)
+            (beginning-of-line)
+            (delete-region (point) (progn (next-logical-line) (point))))
+           ((string-match "Perhaps you meant ‘\\([^‘]*\\)’" msg)
+            (let ((replacement (match-string 1 msg)))
+              ;; ^^ delete-region may garble the matches
+              (apply #'delete-region (dante-ident-pos-at-point))
+              (insert replacement)))
+           ((--any? (string-match it msg) dante-suggestible-extensions)
+            (goto-char 1)
+            (insert (concat "{-# LANGUAGE " (car (--filter (string-match it msg) dante-suggestible-extensions)) " #-}\n")))
+           (t (message "Cannot fix this error automatically"))))))))
+
 
 (provide 'dante)
 
 ;;; dante.el ends here
+
