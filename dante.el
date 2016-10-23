@@ -94,8 +94,7 @@ a file or directory variable if the guess is wrong."
 
 (defun dante-lighter ()
   "Lighter for the dante minor mode."
-  (let ((buffer (dante-buffer-p)))
-    (concat " Dante:" (if buffer (symbol-name (buffer-local-value 'dante-state buffer)) "-"))))
+  (concat " Dante:" (symbol-name (dante-state))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
@@ -147,6 +146,11 @@ automatically. The user will have to manually run `dante-restart'
 or `dante-targets' to destroy the buffer and create a fresh one
 without this variable enabled.
   ")
+
+(defun dante-state ()
+  "Return dante-state for the current source buffer."
+  (let ((process-buffer (dante-buffer-p)))
+    (if process-buffer (buffer-local-value 'dante-state process-buffer) 'stopped)))
 
 (defvar-local dante-starting nil
   "When non-nil, indicates that the dante process starting up.")
@@ -225,10 +229,10 @@ line as a type signature."
   "Simply restart the process with the same configuration as before."
   (interactive)
   (when (dante-buffer-p)
-    (let ((targets (with-current-buffer (dante-buffer )
+    (let ((targets (with-current-buffer (dante-buffer)
                      dante-targets)))
-      (dante-destroy )
-      (dante-get-worker-create  targets (current-buffer)))))
+      (dante-destroy)
+      (dante-get-worker-create targets (current-buffer)))))
 
 (defun dante-targets ()
   "Set the targets to use for cabal repl."
@@ -254,7 +258,7 @@ line as a type signature."
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
-  (if (dante-gave-up)
+  (if (eq (dante-state) 'dead)
       (run-with-timer 0 nil cont 'interrupted)
     (let ((file-buffer (current-buffer)))
       (dante-async-load-current-buffer
@@ -617,7 +621,6 @@ type as arguments."
   "Send GHCi the command string CMD and block pending its result."
   (let ((result nil))
     (dante-async-call
-     
      cmd
      (lambda (reply) (setq result reply)))
     (while (not result) (sleep-for 0.0001))
@@ -634,15 +637,17 @@ type as arguments."
   "Get the GHCi process for the current directory."
   (get-buffer-process (dante-buffer )))
 
-(defun dante-get-worker-create ( &optional targets source-buffer)
+(defun dante-get-worker-create (&optional targets source-buffer)
   "Start GHCi.
 If provided, use the specified TARGETS and SOURCE-BUFFER."
-  (let* ((buffer (dante-get-buffer-create )))
+  (let* ((buffer (dante-get-buffer-create)))
     (if (get-buffer-process buffer)
         buffer
       (dante-start-process-in-buffer buffer targets source-buffer))))
 
 (defun dante-environment ()
+  "Return environment for dante.
+See variable dante-environment."
   (or dante-environment
       (setq dante-environment
             (if (file-exists-p (concat (dante-project-root) "shell.nix"))
@@ -650,6 +655,7 @@ If provided, use the specified TARGETS and SOURCE-BUFFER."
               'bare))))
 
 (defun dante-command-line (cmd)
+  "Wrap the command line CMD according to `dante-environment'."
   (cl-case (dante-environment)
     (nix (list "nix-shell" "--run" (combine-and-quote-strings cmd)))
     (bare cmd)))
@@ -790,7 +796,7 @@ You can always run M-x dante-restart to make it try again.
   (replace-regexp-in-string "\r" "" string))
 
 (defun dante-get-buffer-create ()
-  "Get or create the stack buffer for GHCi.
+  "Get or create the buffer for GHCi.
 Uses the directory of the current buffer for context."
   (let* ((root (dante-project-root))
          (cabal-file (dante-cabal-find-file))
@@ -806,12 +812,6 @@ Uses the directory of the current buffer for context."
       (setq dante-package-name package-name)
       (cd default-directory)
       (current-buffer))))
-
-(defun dante-gave-up ()
-  "Return non-nil if starting GHCi failed."
-  (and (dante-buffer-p)
-       (let ((buffer (get-buffer (dante-buffer-name))))
-         (eq (buffer-local-value 'dante-state buffer) 'dead))))
 
 (defun dante-buffer-p ()
   "Return non-nil if a GHCi buffer exists."
@@ -897,7 +897,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; xref support
 
-(defun dante--xref-backend () (when dante-mode 'dante))
+(defun dante--xref-backend () "Dante xref backend." (when dante-mode 'dante))
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql dante)))
   (dante-ident-at-point))
