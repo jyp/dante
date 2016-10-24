@@ -659,12 +659,6 @@ Automatically performs initial actions in SOURCE-BUFFER."
                      :func (lambda (_msg)
                               (with-current-buffer buffer
                                 (setq-local dante-state 'running))
-                              (when flycheck-mode
-                                ;; TODO: is this necessary?
-                                (run-with-timer 0 nil
-                                                'dante-call-in-buffer
-                                                (current-buffer)
-                                                'flycheck-buffer))
                               (message "GHCi started!"))))))
       (set-process-filter
        process
