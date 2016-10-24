@@ -572,17 +572,6 @@ type as arguments."
 (defun dante--ghc-column-number-at-pos (pos)
   (1+ (save-excursion (goto-char pos) (current-column))))
 
-(defun dante-get-loc-at (beg end)
-  "Get the location of the identifier denoted by BEG and END."
-   (dante-blocking-call
-    (format ":loc-at %S %d %d %d %d %S"
-            (dante-temp-file-name)
-            (line-number-at-pos beg)
-            (dante--ghc-column-number-at-pos beg)
-            (line-number-at-pos end)
-            (dante--ghc-column-number-at-pos end)
-            (buffer-substring-no-properties beg end))))
-
 (defun dante-get-uses-at (beg end)
   "Return usage list for identifier denoted by BEG and END."
    (dante-blocking-call
@@ -890,14 +879,22 @@ Equivalent to 'warn', but label the warning as coming from dante."
 (defun dante--xref-backend () "Dante xref backend." (when dante-mode 'dante))
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql dante)))
-  (dante-ident-at-point))
+  (pcase (dante-ident-pos-at-point)
+    (`(,beg . (,end . nil))
+     (format "%S %d %d %d %d %s"
+             (dante-temp-file-name)
+             (line-number-at-pos beg)
+             (dante--ghc-column-number-at-pos beg)
+             (line-number-at-pos end)
+             (dante--ghc-column-number-at-pos end)
+             (buffer-substring-no-properties beg end)))))
 
 (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql dante)))
   nil)
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
-  (dante-async-call  (concat ":l " (dante-temp-file-name)))
-  (let ((result (apply #'dante-get-loc-at (dante-ident-pos-at-point))))
+  (dante-async-load-current-buffer)
+  (let ((result (dante-blocking-call (concat ":loc-at " symbol))))
     (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
                         result)
       (let ((file (match-string 1 result))
@@ -909,17 +906,24 @@ Equivalent to 'warn', but label the warning as coming from dante."
                                     (1- col))))))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
-  (dante-async-call  (concat ":l " (dante-temp-file-name)))
-  (let ((result (apply #'dante-get-uses-at (dante-ident-pos-at-point))))
-    (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
-                        result)
-      (let ((file (match-string 1 result))
-            (line (string-to-number (match-string 2 result)))
-            (col (string-to-number (match-string 3 result))))
-            (list (xref-make "ref" (xref-make-file-location
-                                    (if (string= file (dante-temp-file-name)) (buffer-file-name) file)
-                                    line
-                                    (1- col))))))))
+  (dante-async-load-current-buffer)
+  (let ((result (dante-blocking-call (concat ":uses " symbol)))
+        (start 0)
+        (refs nil))
+    (while start
+      (if (not (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
+                             result start))
+          (setq start nil)
+        (setq start (match-end 0))
+        (let ((file (match-string 1 result))
+              (line (string-to-number (match-string 2 result)))
+              (col (string-to-number (match-string 3 result))))
+          (push (xref-make "ref" (xref-make-file-location
+                                  (if (string= file (dante-temp-file-name)) (buffer-file-name) file)
+                                  line
+                                  (1- col)))
+                refs))))
+    (nreverse refs)))
 
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
