@@ -229,7 +229,7 @@ line as a type signature."
             (goto-char (point-min))))))))
 
 (defun dante-restart ()
-  "Simply restart the process with the same configuration as before."
+  "Restart the process with the same configuration as before."
   (interactive)
   (when (dante-buffer-p)
     (let ((targets (with-current-buffer (dante-buffer)
@@ -923,12 +923,6 @@ Equivalent to 'warn', but label the warning as coming from dante."
       (let ((msg (car messages)))
         (save-excursion
           (cond
-           ((string-match "Top-level binding with no type signature:[\n ]*" msg)
-            (beginning-of-line)
-            (insert (concat (substring msg (match-end 0)) "\n")))
-           ((string-match "The import of ‘.*’ is redundant" msg)
-            (beginning-of-line)
-            (delete-region (point) (progn (next-logical-line) (point))))
            ((string-match "Perhaps you meant ‘\\([^‘]*\\)’" msg)
             (let ((replacement (match-string 1 msg)))
               ;; ^^ delete-region may garble the matches
@@ -937,7 +931,16 @@ Equivalent to 'warn', but label the warning as coming from dante."
            ((--any? (string-match it msg) dante-suggestible-extensions)
             (goto-char 1)
             (insert (concat "{-# LANGUAGE " (car (--filter (string-match it msg) dante-suggestible-extensions)) " #-}\n")))
-           (t (message "Cannot fix this error automatically"))))))))
+           ((string-match "Top-level binding with no type signature:[\n ]*" msg)
+            (beginning-of-line)
+            (insert (concat (substring msg (match-end 0)) "\n")))
+           ((string-match "Defined but not used" msg)
+            (goto-char (car (dante-ident-pos-at-point)))
+            (insert "_"))
+           ((string-match "The import of ‘.*’ is redundant" msg)
+            (beginning-of-line)
+            (delete-region (point) (progn (next-logical-line) (point))))
+           (t (message "Cannot fix the issue at point automatically"))))))))
 
 
 (provide 'dante)
