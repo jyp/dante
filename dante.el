@@ -207,12 +207,11 @@ line as a type signature."
 (defun dante-info (ident)
   "Get the info about the IDENT at point."
   (interactive (list (dante-ident-at-point)))
-  (let ((origin-buffer (current-buffer))
-        (package (dante-package-name))
+  (let ((package (dante-package-name))
         (info (dante-get-info-of ident))
         (help-xref-following nil)
         (origin (buffer-name)))
-    (help-setup-xref (list #'dante-call-in-buffer origin-buffer #'dante-info ident)
+    (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                      (called-interactively-p 'interactive))
     (save-excursion
       (let ((help-xref-following nil))
