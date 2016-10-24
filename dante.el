@@ -197,7 +197,7 @@ You can use this to kill them or look inside."
 With prefix argument INSERT, inserts the type above the current
 line as a type signature."
   (interactive "P")
-  (let ((ty (apply #'dante-get-type-at (dante-thing-at-point))))
+  (let ((ty (dante-get-type-at (dante-thing-at-point))))
     (if insert
         (save-excursion
           (goto-char (line-beginning-position))
@@ -531,29 +531,23 @@ x:\\foo\\bar (i.e., Windows)."
 (defun dante--kill-last-newline (string)
   (replace-regexp-in-string "\n$" "" string))
 
-(defun dante-get-type-at (beg end)
-  "Get the type at the given region denoted by BEG and END."
+(defun dante-get-type-at (reg)
+  "Get the type at the given region denoted by REG."
   (dante-async-call  ":set -fobject-code")
   (dante-async-load-current-buffer)
-  (dante-blocking-call (dante-format-get-type-at beg end)))
+  (dante-blocking-call (dante-format-get-type-at reg)))
 
 (defun dante-get-type-at-async (cont reg)
   "Call CONT with type of the region denoted by REG.
 CONT is called within the current buffer, with the
 type as arguments."
   (dante-async-call
-   (apply #'dante-format-get-type-at reg)
+   (dante-format-get-type-at reg)
    (lambda (reply) (funcall cont (dante--kill-last-newline reply)))))
 
-(defun dante-format-get-type-at (beg end)
-  "Compose a request for getting types in region from BEG to END."
-  (format ":type-at %S %d %d %d %d %s"
-          (dante-temp-file-name)
-          (line-number-at-pos beg)
-          (dante--ghc-column-number-at-pos beg)
-          (line-number-at-pos end)
-          (dante--ghc-column-number-at-pos end)
-          (buffer-substring-no-properties beg end)))
+(defun dante-format-get-type-at (reg)
+  "Compose a request for getting the type of the subexp in REG."
+  (concat ":type-at " (apply #'dante--ghc-subexp reg)))
 
 (defun dante-get-info-of (thing)
   "Get info for THING."
@@ -572,16 +566,14 @@ type as arguments."
 (defun dante--ghc-column-number-at-pos (pos)
   (1+ (save-excursion (goto-char pos) (current-column))))
 
-(defun dante-get-uses-at (beg end)
-  "Return usage list for identifier denoted by BEG and END."
-   (dante-blocking-call
-    (format ":uses %S %d %d %d %d %S"
-            (dante-temp-file-name)
-            (line-number-at-pos beg)
-            (dante--ghc-column-number-at-pos beg)
-            (line-number-at-pos end)
-            (dante--ghc-column-number-at-pos end)
-            (buffer-substring-no-properties beg end))))
+(defun dante--ghc-subexp (beg end)
+  (format "%S %d %d %d %d %s"
+          (dante-temp-file-name)
+          (line-number-at-pos beg)
+          (dante--ghc-column-number-at-pos beg)
+          (line-number-at-pos end)
+          (dante--ghc-column-number-at-pos end)
+          (buffer-substring-no-properties beg end)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Process communication
@@ -879,15 +871,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
 (defun dante--xref-backend () "Dante xref backend." (when dante-mode 'dante))
 
 (cl-defmethod xref-backend-identifier-at-point ((_backend (eql dante)))
-  (pcase (dante-ident-pos-at-point)
-    (`(,beg . (,end . nil))
-     (format "%S %d %d %d %d %s"
-             (dante-temp-file-name)
-             (line-number-at-pos beg)
-             (dante--ghc-column-number-at-pos beg)
-             (line-number-at-pos end)
-             (dante--ghc-column-number-at-pos end)
-             (buffer-substring-no-properties beg end)))))
+  (apply #'dante--ghc-subexp (dante-ident-pos-at-point)))
 
 (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql dante)))
   nil)
@@ -965,4 +949,3 @@ Equivalent to 'warn', but label the warning as coming from dante."
 (provide 'dante)
 
 ;;; dante.el ends here
-
