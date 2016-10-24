@@ -204,6 +204,13 @@ line as a type signature."
           (insert (dante-fontify-expression ty) "\n"))
       (message "%s" (dante-fontify-expression ty)))))
 
+(defun dante-get-type-at (reg)
+  "Get the type at the given region denoted by REG."
+  (dante-async-call  ":set -fobject-code")
+  (dante-async-load-current-buffer)
+  (dante-blocking-call (concat ":type-at " (dante--ghc-subexp reg))))
+
+
 (defun dante-info (ident)
   "Get the info about the IDENT at point."
   (interactive (list (dante-ident-at-point)))
@@ -226,6 +233,20 @@ line as a type signature."
              "\n\n"
              (dante-fontify-expression info))
             (goto-char (point-min))))))))
+
+(defun dante-get-info-of (thing)
+  "Get info for THING."
+  (let ((optimistic-result
+         (dante-blocking-call (format ":i %s" thing))))
+    (if (string-match "^<interactive>" optimistic-result)
+        ;; Load the module Interpreted so that we get information
+        (progn (dante-async-call  ":set -fbyte-code")
+               ;; ^^ Workaround for a bug of GHCi: info for external
+               ;; ids can be gotten only so
+               (dante-async-load-current-buffer)
+               (dante-blocking-call
+                (format ":i %s" thing)))
+      optimistic-result)))
 
 (defun dante-restart ()
   "Restart the process with the same configuration as before."
@@ -399,6 +420,14 @@ instead of using `eldoc-documentation-function'."
   ;; If we have something cached at point, print that first:
   (gethash pos eldoc-dante-cache))))
 
+(defun dante-get-type-at-async (cont reg)
+  "Call CONT with type of the region denoted by REG.
+CONT is called within the current buffer, with the
+type as arguments."
+  (dante-async-call
+   (concat ":type-at " (dante--ghc-subexp reg))
+   (lambda (reply) (funcall cont reply))))
+
 (defun dante-haskell-utils-repl-response-error-status (response)
   "Parse response REPL's RESPONSE for errors.
 Returns one of the following symbols:
@@ -526,34 +555,6 @@ x:\\foo\\bar (i.e., Windows)."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Query/commands
-
-(defun dante-get-type-at (reg)
-  "Get the type at the given region denoted by REG."
-  (dante-async-call  ":set -fobject-code")
-  (dante-async-load-current-buffer)
-  (dante-blocking-call (concat ":type-at " (dante--ghc-subexp reg))))
-
-(defun dante-get-type-at-async (cont reg)
-  "Call CONT with type of the region denoted by REG.
-CONT is called within the current buffer, with the
-type as arguments."
-  (dante-async-call
-   (concat ":type-at " (dante--ghc-subexp reg))
-   (lambda (reply) (funcall cont reply))))
-
-(defun dante-get-info-of (thing)
-  "Get info for THING."
-  (let ((optimistic-result
-         (dante-blocking-call (format ":i %s" thing))))
-    (if (string-match "^<interactive>" optimistic-result)
-        ;; Load the module Interpreted so that we get information
-        (progn (dante-async-call  ":set -fbyte-code")
-               ;; ^^ Workaround for a bug of GHCi: info for external
-               ;; ids can be gotten only so
-               (dante-async-load-current-buffer)
-               (dante-blocking-call
-                (format ":i %s" thing)))
-      optimistic-result)))
 
 (defun dante--ghc-column-number-at-pos (pos)
   (1+ (save-excursion (goto-char pos) (current-column))))
