@@ -528,9 +528,6 @@ x:\\foo\\bar (i.e., Windows)."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Query/commands
 
-(defun dante--kill-last-newline (string)
-  (replace-regexp-in-string "\n$" "" string))
-
 (defun dante-get-type-at (reg)
   "Get the type at the given region denoted by REG."
   (dante-async-call  ":set -fobject-code")
@@ -543,7 +540,7 @@ CONT is called within the current buffer, with the
 type as arguments."
   (dante-async-call
    (concat ":type-at " (dante--ghc-subexp reg))
-   (lambda (reply) (funcall cont (dante--kill-last-newline reply)))))
+   (lambda (reply) (funcall cont reply))))
 
 (defun dante-get-info-of (thing)
   "Get info for THING."
@@ -593,7 +590,7 @@ type as arguments."
      cmd
      (lambda (reply) (setq result reply)))
     (while (not result) (sleep-for 0.0001))
-    (dante--kill-last-newline result)))
+    result))
 
 (defun dante-buffer ()
   "Get the GHCi buffer for the current directory."
@@ -746,7 +743,8 @@ You can always run M-x dante-restart to make it try again.
   (goto-char (point-min))
   (when (search-forward "\4" (point-max) t 1)
     (let ((callback (pop dante-callbacks)))
-      (let ((string (dante--strip-carriage-returns (buffer-substring (point-min) (1- (point))))))
+      (let ((string (dante--kill-last-newline
+                     (dante--strip-carriage-returns (buffer-substring (point-min) (1- (point)))))))
         (delete-region (point-min) (point))
         (if callback
             (progn (with-current-buffer (plist-get callback :source-buffer)
@@ -759,6 +757,9 @@ You can always run M-x dante-restart to make it try again.
 (defun dante--strip-carriage-returns (string)
   "Strip the \\r from Windows \\r\\n line endings in STRING."
   (replace-regexp-in-string "\r" "" string))
+
+(defun dante--kill-last-newline (string)
+  (replace-regexp-in-string "\n$" "" string))
 
 (defun dante-get-buffer-create ()
   "Get or create the buffer for GHCi.
