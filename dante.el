@@ -108,15 +108,13 @@ directory variable if the guess is wrong."
 \\{dante-mode-map}"
   :lighter (:eval (dante-lighter))
   :keymap dante-mode-map
-  (when (bound-and-true-p interactive-haskell-mode)
-    (when (fboundp 'interactive-haskell-mode)
-      (message "Disabling interactive-haskell-mode ...")
-      (interactive-haskell-mode -1)))
   (if dante-mode
       (progn (flycheck-select-checker 'dante)
              (setq-local eldoc-documentation-function 'eldoc-dante))
-    (message "Dante mode disabled.")))
+      (progn (flycheck-select-checker 'haskell-ghc)
+             (setq-local eldoc-documentation-function 'ignore))))
 
+(define-key dante-mode-map (kbd "C-c C-x C-r") 'dante-restart)
 (define-key dante-mode-map (kbd "C-c C-t") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c C-i") 'dante-info)
 (define-key dante-mode-map (kbd "C-c C-a") 'dante-auto-fix)
@@ -298,8 +296,6 @@ line as a type signature."
 process."
   :start 'dante-check
   :modes '(haskell-mode literate-haskell-mode))
-
-(add-to-list 'flycheck-checkers 'dante)
 
 (defun dante-parse-errors-warnings-splices (checker buffer string)
   "Parse flycheck errors and warnings.
