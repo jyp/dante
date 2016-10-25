@@ -271,12 +271,18 @@ line as a type signature."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
 
+(defvar-local dante-loaded-file "-")
+
 (defun dante-async-load-current-buffer (&optional cont)
   "Load (interpreted) the temp buffer and run CONT."
-  (dante-async-call  (concat ":l *" (dante-temp-file-name)) cont)
-  ;; Note the * so that we collect the type info for the current
-  ;; module (also, probably faster.)
-)
+  (message "L? %s %s"(buffer-local-value 'dante-loaded-file (dante-buffer)) (dante-temp-file-name))
+  (let ((fname (dante-temp-file-name)))
+    (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer)) fname)
+        (dante-async-call ":r" cont)
+    (dante-async-call (concat ":l *" fname) cont)
+    ;; Note the * so that we collect the type info for the current
+    ;; module (also, probably faster.)
+    (with-current-buffer (dante-buffer) (setq dante-loaded-file fname)))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
@@ -515,6 +521,9 @@ The path returned is canonicalized and stripped of any text properties."
 (defvar-local dante-temp-file-name nil
   "The name of a temporary file to which the current buffer's content is copied.")
 
+(defvar-local dante-temp-text "-"
+  "The contents the buffer last written to `dante-temp-file-name' ")
+
 (defun dante-temp-file-name (&optional buffer)
   "Return the name of a temp file containing an up-to-date copy of BUFFER's contents."
   (with-current-buffer (or buffer (current-buffer))
@@ -523,8 +532,9 @@ The path returned is canonicalized and stripped of any text properties."
             (setq dante-temp-file-name
                   (dante-canonicalize-path (make-temp-file "dante" nil ".hs"))))
       (let ((contents (buffer-string)))
-        (with-temp-file dante-temp-file-name
-          (insert contents))))))
+        (unless (string-equal contents dante-temp-text) ;; so ghci's :r may be noop
+          (setq dante-temp-text contents)
+          (write-region nil nil dante-temp-file-name 0))))))
 
 (defun dante-canonicalize-path (path)
   "Return a standardized version of PATH.
@@ -588,7 +598,7 @@ x:\\foo\\bar (i.e., Windows)."
         buffer
       (dante-get-worker-create nil))))
 
-(defun dante-process ()
+(defun dante-process () ;; TODO: remove
   "Get the GHCi process for the current directory."
   (get-buffer-process (dante-buffer )))
 
