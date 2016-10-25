@@ -565,9 +565,9 @@ x:\\foo\\bar (i.e., Windows)."
   "Stop GHCi and kill its associated process buffer."
   (interactive)
   (when (dante-buffer-p)
-    (with-current-buffer (dante-get-buffer-create)
+    (set-dante-state 'deleting)
+    (with-current-buffer (dante-buffer-p)
       (when (get-buffer-process (current-buffer))
-        (setq dante-state 'deleting)
         (kill-process (get-buffer-process (current-buffer)))
         (delete-process (get-buffer-process (current-buffer))))
       (kill-buffer (current-buffer)))))
@@ -633,19 +633,17 @@ Automatically performs initial actions in SOURCE-BUFFER."
       (process-send-string process ":set +c\n") ;; collect type info
       (process-send-string process ":set -fobject-code\n") ;; so that compilation results are cached
       (process-send-string process ":set prompt \"\\4\"\n")
+      (set-dante-state 'starting)
       (with-current-buffer buffer
         (erase-buffer)
         (fundamental-mode)
         (setq dante-arguments args)
         (setq dante-targets targets)
-        (setq dante-state 'starting)
         (setq dante-callbacks
               (list (list
                      :source-buffer source-buffer
                      :func (lambda (_msg)
-                              (with-current-buffer buffer
-                                (setq-local dante-state 'running))
-                              (message "GHCi started!"))))))
+                             (set-dante-state 'ready))))))
       (set-process-filter
        process
        (lambda (process string)
@@ -665,7 +663,8 @@ The result is passed to CALLBACK as (CALLBACK REPLY)."
   (let ((source-buffer (current-buffer))
         (buffer (dante-buffer)))
     (if (and buffer (process-live-p (get-buffer-process buffer)))
-        (progn (with-current-buffer buffer
+        (progn (set-dante-state 'busy)
+               (with-current-buffer buffer
                  (setq dante-callbacks
                        (append dante-callbacks
                                (list (list :func (or callback #'ignore)
@@ -740,6 +739,7 @@ You can always run M-x dante-restart to make it try again.
         (delete-region 1 (point))
         (if callback
             (progn (with-current-buffer (plist-get callback :source-buffer)
+                     (set-dante-state 'ready)
                      (funcall (plist-get callback :func) string))
                    (dante-read-buffer))
           (when dante-debug
@@ -770,6 +770,10 @@ Uses the directory of the current buffer for context."
       (setq dante-package-name package-name)
       (cd default-directory)
       (current-buffer))))
+
+(defun set-dante-state (state)
+  (with-current-buffer (dante-buffer-p) (setq-local dante-state state))
+  (force-mode-line-update))
 
 (defun dante-buffer-p ()
   "Return non-nil if a GHCi buffer exists."
