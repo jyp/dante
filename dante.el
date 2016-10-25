@@ -38,12 +38,12 @@
 ;;
 ;; Mode that enables:
 ;;
-;; * Flycheck type checking
-;; * Go to definition
-;; * Type of selection
-;; * Info
-;; * Apply ghc suggestions (C-c C-a on error at point)
-;; TODO: * Find uses
+;; * Flycheck type checking (flycheck-mode)
+;; * Go to definition (xref-find-definitions)
+;; * Type of selection (C-c C-t)
+;; * Info (C-c C-i)
+;; * Apply Ghc suggestion (C-c C-a with an error at point)
+;; * Find uses (xref-find-references)
 
 ;;; Code:
 
