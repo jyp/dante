@@ -69,21 +69,24 @@
   :group 'dante
   :type 'boolean)
 
+;; TODO: collapse dante-environment, dante-targets, dante-command-line
+;; to one single variable.
 (defcustom dante-environment nil
-  "Environment to use: nix or bare ghc(i).
-Buffer-local: you can set this as a file or directory variable if
-the guess is wrong."
+  "Environment to use: bare ghc(i), nix or stack.
+You can set this as a file or directory variable if the guess is
+wrong."
   :group 'dante
   :type '(choice (const :tag "Nix" nix)
-                 (const :tag "Bare" bare)
+                 (const :tag "Bare (just cabal)" bare)
+                 (const :tag "Stack" stack)
                  (const :tag "Auto" nil)))
 (make-local-variable 'dante-environment)
 
 (defcustom dante-project-root nil
   "The project root.
 When nil, dante will guess the value using the
-`dante-project-root' function.  Buffer-local: you can set this as
-a file or directory variable if the guess is wrong."
+`dante-project-root' function.  You can set this as a file or
+directory variable if the guess is wrong."
   :group 'dante
   :type 'string)
 (make-local-variable 'dante-project-root)
@@ -603,34 +606,37 @@ If provided, use the specified TARGETS."
 See variable dante-environment."
   (or dante-environment
       (setq dante-environment
-            (if (file-exists-p (concat (dante-project-root) "shell.nix"))
-                'nix
-              'bare))))
+            (cond
+             ((file-exists-p (concat (dante-project-root) "stack.yaml")) 'stack)
+             ((file-exists-p (concat (dante-project-root) "shell.nix")) 'nix)
+             (t 'bare)))))
 
-(defun dante-command-line (cmd)
+(defun dante-repl-command-line ()
   "Wrap the command line CMD according to `dante-environment'."
   (cl-case (dante-environment)
-    (nix (list "nix-shell" "--run" (combine-and-quote-strings cmd)))
-    (bare cmd)))
+    (bare (list "cabal" "repl"))
+    (nix (list "nix-shell" "--run" "cabal" "repl"))
+    (stack '("stack" "repl"))))
 
 (defun dante-start-process-in-buffer (buffer targets source-buffer)
   "Start a Dante worker in BUFFER, for the default or specified TARGETS.
 Automatically performs initial actions in SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
-    (let* ((args (dante-command-line (list "cabal" "repl")))
+    (let* ((args (dante-repl-command-line))
            (process (with-current-buffer buffer
                       (when dante-debug
                         (message "GHCi command line: %s" (combine-and-quote-strings args)))
                       (message "Booting up dante ...")
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
-      (process-send-string process ":set -Wall\n")
+      (process-send-string process ":set -Wall\n") ;; TODO: configure
       (process-send-string process ":set +c\n") ;; collect type info
       (process-send-string process ":set -fobject-code\n") ;; so that compilation results are cached
       (process-send-string process ":set prompt \"\\4\"\n")
       (with-current-buffer buffer
         (erase-buffer)
+        (fundamental-mode)
         (setq dante-arguments args)
         (setq dante-targets targets)
         (setq dante-state 'starting)
