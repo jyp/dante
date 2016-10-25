@@ -197,19 +197,14 @@ You can use this to kill them or look inside."
 With prefix argument INSERT, inserts the type above the current
 line as a type signature."
   (interactive "P")
-  (let ((ty (dante-get-type-at (dante-thing-at-point))))
+  (dante-async-load-current-buffer)
+  (let ((ty (dante-blocking-call
+             (concat ":type-at " (dante--ghc-subexp (dante-thing-at-point))))))
     (if insert
         (save-excursion
           (goto-char (line-beginning-position))
           (insert (dante-fontify-expression ty) "\n"))
       (message "%s" (dante-fontify-expression ty)))))
-
-(defun dante-get-type-at (reg)
-  "Get the type at the given region denoted by REG."
-  (dante-async-call  ":set -fobject-code")
-  (dante-async-load-current-buffer)
-  (dante-blocking-call (concat ":type-at " (dante--ghc-subexp reg))))
-
 
 (defun dante-info (ident)
   "Get the info about the IDENT at point."
@@ -405,7 +400,8 @@ instead of using `eldoc-documentation-function'."
   "ElDoc backend for dante."
   (let ((pos (dante-thing-at-point)))
     (when pos
-      (dante-get-type-at-async
+      (dante-async-call
+       (concat ":type-at " (dante--ghc-subexp pos))
          (lambda (ty)
            (let ((response-status (dante-haskell-utils-repl-response-error-status ty)))
              (if (eq 'no-error response-status)
@@ -415,18 +411,9 @@ instead of using `eldoc-documentation-function'."
                  (puthash pos msg eldoc-dante-cache)
                  (eldoc-dante-maybe-print msg))
                ;; But if we're seeing errors, invalidate cache-at-point:
-               (remhash pos eldoc-dante-cache))))
-         pos)
+               (remhash pos eldoc-dante-cache)))))
   ;; If we have something cached at point, print that first:
   (gethash pos eldoc-dante-cache))))
-
-(defun dante-get-type-at-async (cont reg)
-  "Call CONT with type of the region denoted by REG.
-CONT is called within the current buffer, with the
-type as arguments."
-  (dante-async-call
-   (concat ":type-at " (dante--ghc-subexp reg))
-   (lambda (reply) (funcall cont reply))))
 
 (defun dante-haskell-utils-repl-response-error-status (response)
   "Parse response REPL's RESPONSE for errors.
@@ -606,7 +593,7 @@ x:\\foo\\bar (i.e., Windows)."
 (defun dante-get-worker-create (&optional targets)
   "Start a GHCi session suitable for the current (source) buffer.
 If provided, use the specified TARGETS."
-  (let* ((buffer (dante-get-buffer-create)))
+  (let ((buffer (dante-get-buffer-create)))
     (if (get-buffer-process buffer)
         buffer
       (dante-start-process-in-buffer buffer targets (current-buffer)))))
@@ -740,12 +727,12 @@ You can always run M-x dante-restart to make it try again.
 
 (defun dante-read-buffer ()
   "In the process buffer, we read what's in it."
-  (goto-char (point-min))
-  (when (search-forward "\4" (point-max) t 1)
+  (goto-char 1)
+  (when (search-forward "\4" nil t 1)
     (let ((callback (pop dante-callbacks)))
       (let ((string (dante--kill-last-newline
-                     (dante--strip-carriage-returns (buffer-substring (point-min) (1- (point)))))))
-        (delete-region (point-min) (point))
+                     (dante--strip-carriage-returns (buffer-substring 1 (1- (point)))))))
+        (delete-region 1 (point))
         (if callback
             (progn (with-current-buffer (plist-get callback :source-buffer)
                      (funcall (plist-get callback :func) string))
@@ -939,7 +926,6 @@ Equivalent to 'warn', but label the warning as coming from dante."
             (beginning-of-line)
             (delete-region (point) (progn (next-logical-line) (point))))
            (t (message "Cannot fix the issue at point automatically"))))))))
-
 
 (provide 'dante)
 
