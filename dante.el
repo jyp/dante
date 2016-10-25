@@ -73,23 +73,21 @@
 ;; to one single variable.
 (defcustom dante-environment nil
   "Environment to use: bare ghc(i), nix or stack.
-You can set this as a file or directory variable if the guess is
+You should set this as a file or directory variable if the guess is
 wrong."
   :group 'dante
   :type '(choice (const :tag "Nix" nix)
                  (const :tag "Bare (just cabal)" bare)
                  (const :tag "Stack" stack)
                  (const :tag "Auto" nil)))
-(make-local-variable 'dante-environment)
 
 (defcustom dante-project-root nil
   "The project root.
 When nil, dante will guess the value using the
-`dante-project-root' function.  You can set this as a file or
+`dante-project-root' function.  You should set this as a file or
 directory variable if the guess is wrong."
   :group 'dante
   :type 'string)
-(make-local-variable 'dante-project-root)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Modes
@@ -186,7 +184,7 @@ You can use this to kill them or look inside."
 (defun dante-fontify-expression (expression)
   "Return a haskell-fontified version of EXPRESSION."
   (with-temp-buffer
-    (let ((haskell-hook nil)) ;; to keep switching mode cheap
+    (let ((haskell-mode-hook nil)) ;; to keep switching mode cheap
       (when (fboundp 'haskell-mode) (haskell-mode))
       (insert expression)
       (font-lock-ensure)
@@ -275,7 +273,6 @@ line as a type signature."
 
 (defun dante-async-load-current-buffer (&optional cont)
   "Load (interpreted) the temp buffer and run CONT."
-  (message "L? %s %s"(buffer-local-value 'dante-loaded-file (dante-buffer)) (dante-temp-file-name))
   (let ((fname (dante-temp-file-name)))
     (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer)) fname)
         (dante-async-call ":r" cont)
