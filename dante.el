@@ -232,6 +232,7 @@ line as a type signature."
 
 (defun dante-get-info-of (thing)
   "Get info for THING."
+  (dante-async-load-current-buffer)
   (let ((optimistic-result
          (dante-blocking-call (format ":i %s" thing))))
     (if (string-match "^<interactive>" optimistic-result)
@@ -240,8 +241,10 @@ line as a type signature."
                ;; ^^ Workaround for a bug of GHCi: info for external
                ;; ids can be gotten only so
                (dante-async-load-current-buffer)
-               (dante-blocking-call
-                (format ":i %s" thing)))
+               (prog1
+                   (dante-blocking-call
+                    (format ":i %s" thing))
+                 (dante-async-call  ":set -fobject-code")))
       optimistic-result)))
 
 (defun dante-restart ()
