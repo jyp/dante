@@ -52,7 +52,7 @@
 ;; Configuration
 
 (defgroup dante nil
-  "Complete development mode for Haskell"
+  "Interactive development mode for Haskell"
   :group 'haskell)
 
 (defcustom dante-debug nil
@@ -586,8 +586,7 @@ See variable dante-environment."
     (stack '("stack" "repl"))))
 
 (defun dante-start-process-in-buffer (buffer source-buffer)
-  "Start a Dante worker in BUFFER.
-Automatically performs initial actions in SOURCE-BUFFER."
+  "Start a Dante worker in BUFFER for SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
     (let* ((args (dante-repl-command-line))
@@ -665,34 +664,24 @@ This is a standard process sentinel function."
      "This is the buffer where Emacs talks to GHCi. It's normally hidden,
 but a problem occcured.
 
-TROUBLESHOOTING
+EXTRA TROUBLESHOOTING INFO
 
-It may be obvious if there is some text above this message
-indicating a problem.
+The GHCi process ended. Here is the reason that Emacs gives us:
+  " change "
 
-The process ended. Here is the reason that Emacs gives us:
-
-"
-     "  " change
-     "\n"
-     "For troubleshooting purposes, here are the arguments used to launch dante:
-
-"
-     (combine-and-quote-strings dante-arguments)
-     "
+Here are the arguments used to launch dante:
+" (combine-and-quote-strings dante-arguments) "
 
 WHAT TO DO NEXT
 
 If you fixed the problem, just kill this buffer, Dante will make
-a fresh one and attempt to start the process automatically as
-soon as you start editing code again.
+a fresh one and attempt to start the process automatically.
 
 If you are unable to fix the problem, just leave this buffer
 around in Emacs and Dante will not attempt to start the process
 anymore.
 
 You can always run M-x dante-restart to make it try again.
-
 ")
     'face 'compilation-error)))
 
@@ -745,7 +734,7 @@ Uses the directory of the current buffer for context."
   (force-mode-line-update))
 
 (defun dante-buffer-p ()
-  "Return non-nil if a GHCi buffer exists."
+  "Return the GHCi buffer if it exists, nil otherwise."
   (get-buffer (dante-buffer-name)))
 
 (defun dante-buffer-name ()
@@ -912,7 +901,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
   (save-excursion
     (beginning-of-line)
     (if (not (looking-at "{-> "))
-        (message "No in an evaluable block. (Expecting the line to start with '{->')")
+        (message "Not in an evaluable block. (Expecting the line to start with '{->')")
       (let* ((beg (+ 4 (point)))
              (end (if (search-forward "-}" (line-end-position) t)
                       (- (point) 2)
