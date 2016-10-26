@@ -35,15 +35,6 @@
 ;; Boston, MA 02110-1301, USA.
 
 ;;; Commentary:
-;;
-;; Mode that enables:
-;;
-;; * Flycheck type checking (flycheck-mode)
-;; * Go to definition (xref-find-definitions)
-;; * Type of selection (C-c C-t)
-;; * Info (C-c C-i)
-;; * Apply Ghc suggestion (C-c C-a with an error at point)
-;; * Find uses (xref-find-references)
 
 ;;; Code:
 

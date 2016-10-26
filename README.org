@@ -1,0 +1,37 @@
+* Dante: Emacs mode for Interactive Haskell
+
+[[http://stable.melpa.org/packages/boon-badge.svg]]
+
+Dante is a fork of the excellent Intero mode, but which aiming for
+light weightness. Dante has no dependency on "Stack" nor on any
+custom Haskell code.
+
+** Features
+
+| Feature                                 | How to use              |
+|-----------------------------------------+-------------------------|
+| Flycheck type checking                  | enable (flycheck-mode)  |
+| Type of selection                       | C-c C-t                 |
+| Info at point                           | C-c C-i                 |
+| Apply Ghc suggestion for error at point | C-c C-a                 |
+| Goto definition                         | (xref-find-definitions) |
+| Find uses                               | (xref-find-references)  |
+
+** Installation
+
+Turn on Dante in your ~haskell-mode-hook~. I recommend:
+
+#+BEGIN_SRC elisp
+  (use-package dante
+    :ensure t
+    :commands 'turn-on-dante-mode
+    :init
+    (add-hook 'haskell-mode-hook 'turn-on-dante-mode)))
+#+END_SRC
+
+You may want to be sure not to enable ~(interactive-haskell-mode)~ so
+that Dante keybindings are not hidden.
+
+** Customization
+
+M-x customize-group dante
