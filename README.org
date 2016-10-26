@@ -8,14 +8,15 @@ Haskell code.
 
 ** Features
 
-| Feature                                 | How to use              |
-|-----------------------------------------+-------------------------|
-| Flycheck type checking                  | enable (flycheck-mode)  |
-| Type of selection                       | C-c C-t                 |
-| Info at point                           | C-c C-i                 |
-| Apply Ghc suggestion for error at point | C-c C-a                 |
-| Goto definition                         | (xref-find-definitions) |
-| Find uses                               | (xref-find-references)  |
+| Feature                                 | How to use                   |
+|-----------------------------------------+------------------------------|
+| Flycheck type checking                  | enable (flycheck-mode)       |
+| Type of selection                       | C-c C-t                      |
+| Info at point                           | C-c C-i                      |
+| Apply Ghc suggestion for error at point | C-c C-a                      |
+| Goto definition                         | (xref-find-definitions)      |
+| Find uses                               | (xref-find-references)       |
+| Reploid                                 | C-c C-e at {-> expression -} |
 
 ** Installation
 

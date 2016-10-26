@@ -106,6 +106,7 @@ directory variable."
 (define-key dante-mode-map (kbd "C-c C-t") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c C-i") 'dante-info)
 (define-key dante-mode-map (kbd "C-c C-a") 'dante-auto-fix)
+(define-key dante-mode-map (kbd "C-c C-e") 'dante-eval-block)
 
 ;;;###autoload
 (defun turn-on-dante-mode ()
@@ -899,6 +900,28 @@ Equivalent to 'warn', but label the warning as coming from dante."
             (beginning-of-line)
             (delete-region (point) (progn (next-logical-line) (point))))
            (t (message "Cannot fix the issue at point automatically"))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Reploid
+
+(defun dante-eval-block ()
+  "Evaluate the expression command found in {-> <expr> -} and insert the result."
+  (interactive)
+  (dante-async-load-current-buffer)
+  (save-excursion
+    (beginning-of-line)
+    (if (not (looking-at "{-> "))
+        (message "No in an evaluable block. (Expecting the line to start with '{->')")
+      (let* ((beg (+ 4 (point)))
+             (end (if (search-forward "-}" (line-end-position) t)
+                      (- (point) 2)
+                    (line-end-position)))
+             (res (dante-blocking-call (buffer-substring-no-properties beg end))))
+        (goto-char end)
+        (skip-chars-backward "\t\n ")
+        (delete-region (point) (- (search-forward "-}") 2))
+        (backward-char 2)
+        (insert (concat "\n\n" res "\n"))))))
 
 (provide 'dante)
 
