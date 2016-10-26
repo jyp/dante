@@ -846,8 +846,9 @@ Equivalent to 'warn', but label the warning as coming from dante."
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (dante-async-load-current-buffer)
-  (let ((result (dante-blocking-call (concat ":loc-at " symbol))))
-    (list (dante--make-xref result "def"))))
+  (let ((xref (dante--make-xref (dante-blocking-call (concat ":loc-at " symbol))
+                                "def")))
+    (when xref (list xref))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
   (dante-async-load-current-buffer)
