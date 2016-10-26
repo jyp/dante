@@ -60,7 +60,7 @@
   :group 'dante
   :type 'boolean)
 
-;; TODO: collapse dante-environment, dante-targets, dante-command-line
+;; TODO: collapse dante-environment, dante-command-line
 ;; to one single variable.
 (defcustom dante-environment nil
   "Environment to use: bare ghc(i), nix or stack.
@@ -123,9 +123,6 @@ LIST is a FIFO.")
 (defvar-local dante-arguments (list)
   "Arguments used to call the stack process.")
 
-(defvar-local dante-targets (list)
-  "Targets used for the stack process.")
-
 (defvar-local dante-package-name nil
   "The package name associated with the current buffer.")
 
@@ -136,8 +133,7 @@ LIST is a FIFO.")
 - deleting: The process of the buffer is being deleted.
 - dead: GHCi died on its own. Do not try restarting
 automatically. The user will have to manually run `dante-restart'
-or `dante-targets' to destroy the buffer and create a fresh one
-without this variable enabled.
+to destroy the buffer and create a fresh one without this variable enabled.
   ")
 
 (defun dante-state ()
@@ -240,22 +236,8 @@ line as a type signature."
   "Restart the process with the same configuration as before."
   (interactive)
   (when (dante-buffer-p)
-    (let ((targets (with-current-buffer (dante-buffer)
-                     dante-targets)))
-      (dante-destroy)
-      (dante-get-worker-create targets))))
-
-(defun dante-targets ()
-  "Set the targets to use for cabal repl."
-  (interactive)
-  (let* ((old-targets
-          (with-current-buffer (dante-buffer )
-            dante-targets))
-         (targets (split-string (read-from-minibuffer "Targets: " nil nil nil nil old-targets)
-                                " "
-                                t)))
     (dante-destroy)
-    (dante-get-worker-create targets)))
+    (dante-buffer)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
@@ -544,9 +526,11 @@ x:\\foo\\bar (i.e., Windows)."
 ;; Query/commands
 
 (defun dante--ghc-column-number-at-pos (pos)
+  "Format the point POS as a column number as expected by GHCi."
   (1+ (save-excursion (goto-char pos) (current-column))))
 
 (defun dante--ghc-subexp (reg)
+  "Format the subexpression denoted by REG for GHCi commands."
   (pcase reg (`(,beg . (,end . nil))
               (format "%S %d %d %d %d %s"
                       (dante-temp-file-name)
@@ -580,23 +564,15 @@ x:\\foo\\bar (i.e., Windows)."
     result))
 
 (defun dante-buffer ()
-  "Get the GHCi buffer for the current directory."
+  "Get the GHCi buffer for the current (source) buffer."
   (let ((buffer (dante-get-buffer-create)))
     (if (get-buffer-process buffer)
         buffer
-      (dante-get-worker-create nil))))
+      (dante-start-process-in-buffer buffer (current-buffer)))))
 
 (defun dante-process () ;; TODO: remove
   "Get the GHCi process for the current directory."
   (get-buffer-process (dante-buffer )))
-
-(defun dante-get-worker-create (&optional targets)
-  "Start a GHCi session suitable for the current (source) buffer.
-If provided, use the specified TARGETS."
-  (let ((buffer (dante-get-buffer-create)))
-    (if (get-buffer-process buffer)
-        buffer
-      (dante-start-process-in-buffer buffer targets (current-buffer)))))
 
 (defun dante-environment ()
   "Return environment for dante.
@@ -615,8 +591,8 @@ See variable dante-environment."
     (nix (list "nix-shell" "--run" "cabal" "repl"))
     (stack '("stack" "repl"))))
 
-(defun dante-start-process-in-buffer (buffer targets source-buffer)
-  "Start a Dante worker in BUFFER, for the default or specified TARGETS.
+(defun dante-start-process-in-buffer (buffer source-buffer)
+  "Start a Dante worker in BUFFER.
 Automatically performs initial actions in SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
@@ -636,7 +612,6 @@ Automatically performs initial actions in SOURCE-BUFFER."
         (erase-buffer)
         (fundamental-mode)
         (setq dante-arguments args)
-        (setq dante-targets targets)
         (setq dante-callbacks
               (list (list
                      :source-buffer source-buffer
