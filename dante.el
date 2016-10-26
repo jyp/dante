@@ -64,8 +64,8 @@
 ;; to one single variable.
 (defcustom dante-environment nil
   "Environment to use: bare ghc(i), nix or stack.
-You should set this as a file or directory variable if the guess is
-wrong."
+When nil, dante will guess the value.  Customize as a
+file or directory variable."
   :group 'dante
   :type '(choice (const :tag "Nix" nix)
                  (const :tag "Bare (just cabal)" bare)
@@ -74,9 +74,8 @@ wrong."
 
 (defcustom dante-project-root nil
   "The project root.
-When nil, dante will guess the value using the
-`dante-project-root' function.  You should set this as a file or
-directory variable if the guess is wrong."
+When nil, dante will guess the value.  Customize as a file or
+directory variable."
   :group 'dante
   :type 'string)
 
@@ -92,7 +91,7 @@ directory variable if the guess is wrong."
 
 ;;;###autoload
 (define-minor-mode dante-mode
-  "Minor mode for Dante
+  "Minor mode for Dante.
 
 \\{dante-mode-map}"
   :lighter (:eval (dante-lighter))
@@ -108,6 +107,7 @@ directory variable if the guess is wrong."
 (define-key dante-mode-map (kbd "C-c C-i") 'dante-info)
 (define-key dante-mode-map (kbd "C-c C-a") 'dante-auto-fix)
 
+;;;###autoload
 (defun turn-on-dante-mode ()
   "Turn on Dante in the current buffer."
   (interactive)
@@ -133,8 +133,7 @@ LIST is a FIFO.")
 - deleting: The process of the buffer is being deleted.
 - dead: GHCi died on its own. Do not try restarting
 automatically. The user will have to manually run `dante-restart'
-to destroy the buffer and create a fresh one without this variable enabled.
-  ")
+to destroy the buffer and create a fresh one without this variable enabled.")
 
 (defun dante-state ()
   "Return dante-state for the current source buffer."
@@ -557,10 +556,8 @@ x:\\foo\\bar (i.e., Windows)."
 (defun dante-blocking-call (cmd)
   "Send GHCi the command string CMD and block pending its result."
   (let ((result nil))
-    (dante-async-call
-     cmd
-     (lambda (reply) (setq result reply)))
-    (while (not result) (sleep-for 0.0001))
+    (dante-async-call cmd (lambda (reply) (setq result reply)))
+    (while (not result) (sleep-for 0.001))
     result))
 
 (defun dante-buffer ()
@@ -570,12 +567,8 @@ x:\\foo\\bar (i.e., Windows)."
         buffer
       (dante-start-process-in-buffer buffer (current-buffer)))))
 
-(defun dante-process () ;; TODO: remove
-  "Get the GHCi process for the current directory."
-  (get-buffer-process (dante-buffer )))
-
 (defun dante-environment ()
-  "Return environment for dante.
+  "Return environment for Dante.
 See variable dante-environment."
   (or dante-environment
       (setq dante-environment
@@ -645,7 +638,7 @@ The result is passed to CALLBACK as (CALLBACK REPLY)."
                                            :cmd cmd)))))
                (when dante-debug
                  (message "[Dante] -> %s" cmd))
-               (comint-simple-send (dante-process) cmd))
+               (comint-simple-send (get-buffer-process buffer) cmd))
       (error "Dante process is not running: run M-x dante-restart to start it"))))
 
 (defun dante-sentinel (process change)
@@ -839,37 +832,32 @@ Equivalent to 'warn', but label the warning as coming from dante."
 (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql dante)))
   nil)
 
+(defun dante--make-xref (string nm)
+  "Turn the GHCi reference STRING in to an xref with description NM."
+  (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
+                      string)
+    (let ((file (match-string 1 string))
+          (line (string-to-number (match-string 2 string)))
+          (col (string-to-number (match-string 3 string))))
+      (xref-make nm (xref-make-file-location
+                     (if (string= file (dante-temp-file-name)) (buffer-file-name) file)
+                     line
+                     (1- col))))))
+
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (dante-async-load-current-buffer)
   (let ((result (dante-blocking-call (concat ":loc-at " symbol))))
-    (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
-                        result)
-      (let ((file (match-string 1 result))
-            (line (string-to-number (match-string 2 result)))
-            (col (string-to-number (match-string 3 result))))
-            (list (xref-make "def" (xref-make-file-location
-                                    (if (string= file (dante-temp-file-name)) (buffer-file-name) file)
-                                    line
-                                    (1- col))))))))
+    (list (dante--make-xref result "def"))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
   (dante-async-load-current-buffer)
-  (let ((result (dante-blocking-call (concat ":uses " symbol)))
-        (start 0)
-        (refs nil))
-    (while start
-      (if (not (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
-                             result start))
-          (setq start nil)
-        (setq start (match-end 0))
-        (let ((file (match-string 1 result))
-              (line (string-to-number (match-string 2 result)))
-              (col (string-to-number (match-string 3 result))))
-          (push (xref-make "ref" (xref-make-file-location
-                                  (if (string= file (dante-temp-file-name)) (buffer-file-name) file)
-                                  line
-                                  (1- col)))
-                refs))))
+  (let* ((result (dante-blocking-call (concat ":uses " symbol)))
+         (xref (dante--make-xref result "ref"))
+         (refs nil))
+    (while xref
+      (setq result (substring result (match-end 0)))
+      (push xref refs)
+      (setq xref (dante--make-xref result "ref")))
     (nreverse refs)))
 
 (add-hook 'xref-backend-functions 'dante--xref-backend)
