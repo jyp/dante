@@ -724,6 +724,7 @@ You can always run M-x dante-restart to make it try again.
   (replace-regexp-in-string "\r" "" string))
 
 (defun dante--kill-last-newline (string)
+  "Strip the last newline character in STRING."
   (replace-regexp-in-string "\n$" "" string))
 
 (defun dante-get-buffer-create ()
@@ -745,6 +746,7 @@ Uses the directory of the current buffer for context."
       (current-buffer))))
 
 (defun set-dante-state (state)
+  "Set the dante-state to STATE and redisplay the modeline."
   (with-current-buffer (dante-buffer-p) (setq-local dante-state state))
   (force-mode-line-update))
 
