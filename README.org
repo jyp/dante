@@ -16,7 +16,27 @@ Haskell code.
 | Apply Ghc suggestion for error at point | C-c C-a                      |
 | Goto definition                         | (xref-find-definitions)      |
 | Find uses                               | (xref-find-references)       |
-| Reploid                                 | C-c C-e at {-> expression -} |
+| REPLoid (*)                             | C-c C-e at {-> expression -} |
+
+(*) REPLoid explanation: 
+
+#+BEGIN_SRC Haskell
+example :: [String]
+example = ["This is an example", "of", "interactive", "evaluation"]
+
+{-> intercalate " " example
+
+-}
+#+END_SRC
+In the above file, if you type ~C-c C-e~ on the line containing
+"intercalate", you'll get:
+
+#+BEGIN_SRC haskell
+{-> intercalate " " example
+
+"This is an example of interactive evaluation"
+-}
+#+END_SRC
 
 ** Installation
 
