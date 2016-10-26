@@ -17,7 +17,7 @@
 ;; URL: https://github.com/jyp/dante
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((flycheck "0.30") (emacs "25.1") (haskell-mode "13.0"))
+;; Package-Requires: ((flycheck "0.30") (emacs "25.1") (haskell-mode "13.0") (dash "2.13.0"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
