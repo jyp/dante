@@ -907,6 +907,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
 (defun dante-eval-block ()
   "Evaluate the expression command found in {-> <expr> -} and insert the result."
   (interactive)
+  (dante-async-call  ":set -fbyte-code")
   (dante-async-load-current-buffer)
   (save-excursion
     (beginning-of-line)
@@ -921,7 +922,8 @@ Equivalent to 'warn', but label the warning as coming from dante."
         (skip-chars-backward "\t\n ")
         (delete-region (point) (- (search-forward "-}") 2))
         (backward-char 2)
-        (insert (concat "\n\n" res "\n"))))))
+        (insert (concat "\n\n" res "\n")))))
+  (dante-async-call  ":set -fobject-code"))
 
 (provide 'dante)
 
