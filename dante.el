@@ -38,13 +38,14 @@
 
 ;;; Code:
 
-(require 'flycheck)
 (require 'json)
 (require 'warnings)
 (require 'cl-lib)
 (require 'comint)
 (require 'eldoc)
 (require 'dash)
+(require 'xref)
+(require 'flycheck)
 (eval-when-compile
   (require 'wid-edit))
 
@@ -80,21 +81,17 @@ directory variable."
   :type 'string)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Modes
+;; Mode
 
 (defvar dante-mode-map (make-sparse-keymap)
   "Dante minor mode's map.")
-
-(defun dante-lighter ()
-  "Lighter for the dante minor mode."
-  (concat " Dante:" (symbol-name (dante-state))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
   "Minor mode for Dante.
 
 \\{dante-mode-map}"
-  :lighter (:eval (dante-lighter))
+  :lighter (:eval (concat " Danté:" (symbol-name (dante-state))))
   :keymap dante-mode-map
   (if dante-mode
       (progn (flycheck-select-checker 'dante)
@@ -117,9 +114,9 @@ directory variable."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Buffer-local variables/state
 
-(defvar-local dante-callbacks (list)
+(defvar-local dante-callbacks nil
   "List of callbacks waiting for output.
-LIST is a FIFO.")
+This variable is a FIFO list.")
 
 (defvar-local dante-arguments (list)
   "Arguments used to call the stack process.")
@@ -140,9 +137,6 @@ to destroy the buffer and create a fresh one without this variable enabled.")
   "Return dante-state for the current source buffer."
   (let ((process-buffer (dante-buffer-p)))
     (if process-buffer (buffer-local-value 'dante-state process-buffer) 'stopped)))
-
-(defvar-local dante-starting nil
-  "When non-nil, indicates that the dante process starting up.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
@@ -167,6 +161,8 @@ You can use this to kill them or look inside."
           nil
           buffers))
       (error "There are no Dante process buffers"))))
+
+(defvar haskell-mode-hook)
 
 (defun dante-fontify-expression (expression)
   "Return a haskell-fontified version of EXPRESSION."
@@ -492,7 +488,7 @@ The path returned is canonicalized and stripped of any text properties."
   "The name of a temporary file to which the current buffer's content is copied.")
 
 (defvar-local dante-temp-text "-"
-  "The contents the buffer last written to `dante-temp-file-name' ")
+  "The contents last written to `dante-temp-file-name' ")
 
 (defun dante-temp-file-name (&optional buffer)
   "Return the name of a temp file containing an up-to-date copy of BUFFER's contents."
@@ -508,7 +504,7 @@ The path returned is canonicalized and stripped of any text properties."
 
 (defun dante-canonicalize-path (path)
   "Return a standardized version of PATH.
-Path names are standardised and drive names are
+Path names are standardized and drive names are
 capitalized (relevant on Windows)."
   (dante-capitalize-drive-letter (convert-standard-filename path)))
 
