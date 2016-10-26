@@ -504,7 +504,7 @@ The path returned is canonicalized and stripped of any text properties."
       (let ((contents (buffer-string)))
         (unless (string-equal contents dante-temp-text) ;; so ghci's :r may be noop
           (setq dante-temp-text contents)
-          (write-region nil nil dante-temp-file-name 0))))))
+          (write-region nil nil dante-temp-file-name nil 0))))))
 
 (defun dante-canonicalize-path (path)
   "Return a standardized version of PATH.
