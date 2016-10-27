@@ -700,9 +700,9 @@ You can always run M-x dante-restart to make it try again.
   (goto-char 1)
   (when (search-forward-regexp "\4\\(.*\\)|" nil t 1)
     (setq dante-loaded-modules (match-string 1))
-    (let ((callback (pop dante-callbacks)))
-      (let ((string (dante--kill-last-newline
-                     (dante--strip-carriage-returns (buffer-substring 1 (1- (match-beginning 1)))))))
+    (let ((callback (pop dante-callbacks))
+          (string (dante--kill-last-newline
+                   (dante--strip-carriage-returns (buffer-substring 1 (1- (match-beginning 1)))))))
         (delete-region 1 (point))
         (if callback
             (progn (with-current-buffer (plist-get callback :source-buffer)
@@ -711,7 +711,7 @@ You can always run M-x dante-restart to make it try again.
                    (dante-read-buffer))
           (when dante-debug
             (dante--warn "Received output but no callback in `dante-callbacks': %S"
-                         string)))))))
+                         string))))))
 
 (defun dante--strip-carriage-returns (string)
   "Strip the \\r from Windows \\r\\n line endings in STRING."
