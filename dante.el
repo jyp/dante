@@ -61,22 +61,18 @@
   :group 'dante
   :type 'boolean)
 
-;; TODO: collapse dante-environment, dante-command-line
-;; to one single variable.
-(defcustom dante-environment nil
-  "Environment to use: bare ghc(i), nix or stack.
-When nil, dante will guess the value.  Customize as a
-file or directory variable."
+(defcustom dante-repl-command-line nil
+  "Command line to start GHCi.
+When nil, dante will guess the value depending on
+`dante-project-root' contents.  Customize as a file or directory
+variable."
   :group 'dante
-  :type '(choice (const :tag "Nix" nix)
-                 (const :tag "Bare (just cabal)" bare)
-                 (const :tag "Stack" stack)
-                 (const :tag "Auto" nil)))
+  :type '(list string))
 
 (defcustom dante-project-root nil
   "The project root.
-When nil, dante will guess the value.  Customize as a file or
-directory variable."
+When nil, dante will guess the value by looking for a cabal file.
+Customize as a file or directory variable."
   :group 'dante
   :type 'string)
 
@@ -117,9 +113,6 @@ directory variable."
 (defvar-local dante-callbacks nil
   "List of callbacks waiting for output.
 This variable is a FIFO list.")
-
-(defvar-local dante-arguments (list)
-  "Arguments used to call the stack process.")
 
 (defvar-local dante-package-name nil
   "The package name associated with the current buffer.")
@@ -566,21 +559,20 @@ x:\\foo\\bar (i.e., Windows)."
       (dante-start-process-in-buffer buffer (current-buffer)))))
 
 (defun dante-environment ()
-  "Return environment for Dante.
-See variable dante-environment."
-  (or dante-environment
-      (setq dante-environment
-            (cond
-             ((file-exists-p (concat (dante-project-root) "stack.yaml")) 'stack)
-             ((file-exists-p (concat (dante-project-root) "shell.nix")) 'nix)
-             (t 'bare)))))
+  "Guess the project environment."
+  (cond
+   ((file-exists-p (concat (dante-project-root) "stack.yaml")) 'stack)
+   ((file-exists-p (concat (dante-project-root) "shell.nix")) 'nix)
+   (t 'bare)))
 
 (defun dante-repl-command-line ()
   "Wrap the command line CMD according to `dante-environment'."
-  (cl-case (dante-environment)
-    (bare (list "cabal" "repl"))
-    (nix (list "nix-shell" "--run" "cabal" "repl"))
-    (stack '("stack" "repl"))))
+  (or dante-repl-command-line
+      (setq dante-repl-command-line
+            (cl-case (dante-environment)
+              (bare (list "cabal" "repl"))
+              (nix (list "nix-shell" "--run" "cabal" "repl"))
+              (stack '("stack" "repl"))))))
 
 (defun dante-start-process-in-buffer (buffer source-buffer)
   "Start a Dante worker in BUFFER for SOURCE-BUFFER."
@@ -590,7 +582,7 @@ See variable dante-environment."
            (process (with-current-buffer buffer
                       (when dante-debug
                         (message "GHCi command line: %s" (combine-and-quote-strings args)))
-                      (message "Booting up dante ...")
+                      (message "Dante: Starting GHCi ...")
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (process-send-string process ":set -Wall\n") ;; TODO: configure
@@ -601,11 +593,12 @@ See variable dante-environment."
       (with-current-buffer buffer
         (erase-buffer)
         (fundamental-mode)
-        (setq dante-arguments args)
+        (setq-local dante-repl-command-line args)
         (setq dante-callbacks
               (list (list
                      :source-buffer source-buffer
                      :func (lambda (_msg)
+                             (message "Dante: GHCi ready")
                              (set-dante-state 'ready))))))
       (set-process-filter
        process
@@ -636,7 +629,7 @@ The result is passed to CALLBACK as (CALLBACK REPLY)."
                (when dante-debug
                  (message "[Dante] -> %s" cmd))
                (comint-simple-send (get-buffer-process buffer) cmd))
-      (error "Dante process is not running: run M-x dante-restart to start it"))))
+      (error "Dante: GHCi process is not running: run M-x dante-restart to start it"))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -645,20 +638,20 @@ This is a standard process sentinel function."
     (when (not (process-live-p process))
       (let ((buffer (process-buffer process)))
         (if (eq (buffer-local-value 'dante-state buffer) 'deleting)
-            (message "Dante process deleted.")
+            (message "GHCi process deleted.")
             (progn (with-current-buffer buffer (setq dante-state 'dead))
                    (dante-show-process-problem process change)))))))
 
 (defun dante-show-process-problem (process change)
   "Report to the user that PROCESS reported CHANGE, causing it to end."
-  (message "Problem with Dante!")
+  (message "Problem with GHCi process!")
   (switch-to-buffer (process-buffer process))
   (goto-char (point-max))
   (insert "\n---\n\n")
   (insert
    (propertize
     (concat
-     "This is the buffer where Emacs talks to GHCi. It's normally hidden,
+     "This where GHCi output is bufferized. This buffer is normally hidden,
 but a problem occcured.
 
 EXTRA TROUBLESHOOTING INFO
@@ -666,17 +659,21 @@ EXTRA TROUBLESHOOTING INFO
 The GHCi process ended. Here is the reason that Emacs gives us:
   " change "
 
-Here are the arguments used to launch dante:
-" (combine-and-quote-strings dante-arguments) "
+Here is the directory where GHCi was started:
+" default-directory "
+
+Here is the command line used to launch GHCi:
+" (combine-and-quote-strings dante-repl-command-line) "
 
 WHAT TO DO NEXT
 
-If you fixed the problem, just kill this buffer, Dante will make
-a fresh one and attempt to start the process automatically.
+Try to customize (probably file or directory-locally)
+`dante-project-root' and/or `dante-repl-command-line'.  If you
+fixed the problem, just kill this buffer, Dante will make a fresh
+one and attempt to restart GHCi automatically.
 
 If you are unable to fix the problem, just leave this buffer
-around in Emacs and Dante will not attempt to start the process
-anymore.
+around and Dante will not attempt to restart GHCi.
 
 You can always run M-x dante-restart to make it try again.
 ")
