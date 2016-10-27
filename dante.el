@@ -87,7 +87,7 @@ Customize as a file or directory variable."
   "Minor mode for Dante.
 
 \\{dante-mode-map}"
-  :lighter (:eval (concat " Danté:" (symbol-name (dante-state))))
+  :lighter (:eval (concat " Danté:" (dante-status)))
   :keymap dante-mode-map
   (if dante-mode
       (progn (flycheck-select-checker 'dante)
@@ -128,8 +128,13 @@ to destroy the buffer and create a fresh one without this variable enabled.")
 
 (defun dante-state ()
   "Return dante-state for the current source buffer."
-  (let ((process-buffer (dante-buffer-p)))
-    (if process-buffer (buffer-local-value 'dante-state process-buffer) 'stopped)))
+  (buffer-local-value 'dante-state (dante-buffer-p)))
+
+(defun dante-status ()
+  "Return dante-state for the current source buffer."
+  (if (eq (dante-state) 'ready)
+      (buffer-local-value 'dante-loaded-modules (dante-buffer-p))
+      (symbol-name (dante-state))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
@@ -139,6 +144,12 @@ to destroy the buffer and create a fresh one without this variable enabled.")
   (interactive)
   (setq dante-debug (not dante-debug))
   (message "Dante debugging is: %s" (if dante-debug "ON" "OFF")))
+
+(defun dante-debug-info ()
+  "Show debug info."
+  (interactive)
+  (with-current-buffer (dante-buffer-p)
+    (message " Buffer: %s\n Callbacks: %s\n State: %s\n Prompt %s\n"  (dante-buffer-p) dante-callbacks dante-state dante-loaded-modules)))
 
 (defun dante-list-buffers ()
   "List hidden process buffers created by dante.
@@ -591,7 +602,7 @@ x:\\foo\\bar (i.e., Windows)."
       (process-send-string process ":set -Wall\n") ;; TODO: configure
       (process-send-string process ":set +c\n") ;; collect type info
       (process-send-string process ":set -fobject-code\n") ;; so that compilation results are cached
-      (process-send-string process ":set prompt \"\\4\"\n")
+      (process-send-string process ":set prompt \"\\4%s|\"\n")
       (set-dante-state 'starting)
       (with-current-buffer buffer
         (erase-buffer)
@@ -682,13 +693,16 @@ You can always run M-x dante-restart to make it try again.
 ")
     'face 'compilation-error)))
 
+(defvar-local dante-loaded-modules "")
+
 (defun dante-read-buffer ()
   "In the process buffer, we read what's in it."
   (goto-char 1)
-  (when (search-forward "\4" nil t 1)
+  (when (search-forward-regexp "\4\\(.*\\)|" nil t 1)
+    (setq dante-loaded-modules (match-string 1))
     (let ((callback (pop dante-callbacks)))
       (let ((string (dante--kill-last-newline
-                     (dante--strip-carriage-returns (buffer-substring 1 (1- (point)))))))
+                     (dante--strip-carriage-returns (buffer-substring 1 (1- (match-beginning 1)))))))
         (delete-region 1 (point))
         (if callback
             (progn (with-current-buffer (plist-get callback :source-buffer)
