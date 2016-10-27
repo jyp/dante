@@ -487,19 +487,20 @@ The path returned is canonicalized and stripped of any text properties."
 (defvar-local dante-temp-file-name nil
   "The name of a temporary file to which the current buffer's content is copied.")
 
-(defvar-local dante-temp-text "-"
-  "The contents last written to `dante-temp-file-name' ")
+(defvar-local dante-temp-epoch 0
+  "The value of `buffer-modified-tick' when the contents were
+  last written to `dante-temp-file-name' ")
 
-(defun dante-temp-file-name (&optional buffer)
+(defun dante-temp-file-name (&optional buffer) ;; TODO rename
   "Return the name of a temp file containing an up-to-date copy of BUFFER's contents."
   (with-current-buffer (or buffer (current-buffer))
     (prog1
         (or dante-temp-file-name
             (setq dante-temp-file-name
-                  (dante-canonicalize-path (make-temp-file "dante" nil ".hs"))))
-      (let ((contents (buffer-string)))
-        (unless (string-equal contents dante-temp-text) ;; so ghci's :r may be noop
-          (setq dante-temp-text contents)
+                  (dante-canonicalize-path (make-temp-file "dante" nil (file-name-extension (buffer-file-name) t)))))
+      (let ((epoch (buffer-modified-tick)))
+        (unless (equal epoch dante-temp-epoch) ;; so ghci's :r may be noop
+          (setq dante-temp-epoch epoch)
           (write-region nil nil dante-temp-file-name nil 0))))))
 
 (defun dante-canonicalize-path (path)
