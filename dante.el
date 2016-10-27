@@ -235,7 +235,7 @@ line as a type signature."
 
 (defun dante-async-load-current-buffer (&optional cont)
   "Load (interpreted) the temp buffer and run CONT."
-  (let ((fname (dante-temp-file-name)))
+  (let ((fname (dante-temp-file)))
     (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer)) fname)
         (dante-async-call ":r" cont)
     (dante-async-call (concat ":l *" fname) cont)
@@ -291,12 +291,12 @@ CHECKER and BUFFER are added to each item parsed from STRING."
                           (concat file ":" location-raw ": x")))
                (line (plist-get location :line))
                (column (plist-get location :col)))
-          (setq messages
+          (setq messages ;; TODO: push
                 (cons (flycheck-error-new-at
                        line column type
                        msg
                        :checker checker
-                       :buffer (when (string= temp-file file) buffer)
+                       :buffer (when (string= temp-file file) buffer) ;; TODO: put other errors at the top somehow.
                        :filename (dante-buffer-file-name buffer))
                       messages)))
         (forward-line -1))
@@ -480,21 +480,25 @@ The path returned is canonicalized and stripped of any text properties."
 (defvar-local dante-temp-file-name nil
   "The name of a temporary file to which the current buffer's content is copied.")
 
-(defvar-local dante-temp-epoch 0
-  "The value of `buffer-modified-tick' when the contents were
-  last written to `dante-temp-file-name' ")
+(defun dante-temp-file-name (buffer)
+  "Return a filename suitable to store BUFFER's contents."
+  (with-current-buffer buffer
+    (or dante-temp-file-name
+        (setq dante-temp-file-name
+              (dante-canonicalize-path (make-temp-file "dante" nil (file-name-extension (buffer-file-name) t)))))))
 
-(defun dante-temp-file-name (&optional buffer) ;; TODO rename
-  "Return the name of a temp file containing an up-to-date copy of BUFFER's contents."
+(defvar-local dante-temp-epoch -1
+  "The value of `buffer-modified-tick' when the contents were
+  last written to `dante-temp-file-name'.")
+
+(defun dante-temp-file (&optional buffer)
+  "Create a temp file with an up-to-date copy of BUFFER's contents and return its name."
   (with-current-buffer (or buffer (current-buffer))
-    (prog1
-        (or dante-temp-file-name
-            (setq dante-temp-file-name
-                  (dante-canonicalize-path (make-temp-file "dante" nil (file-name-extension (buffer-file-name) t)))))
-      (let ((epoch (buffer-modified-tick)))
-        (unless (equal epoch dante-temp-epoch) ;; so ghci's :r may be noop
-          (setq dante-temp-epoch epoch)
-          (write-region nil nil dante-temp-file-name nil 0))))))
+    (let ((epoch (buffer-modified-tick)))
+      (unless (equal epoch dante-temp-epoch) ;; so ghci's :r may be noop
+        (setq dante-temp-epoch epoch)
+        (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0)))
+    (dante-temp-file-name (current-buffer))))
 
 (defun dante-canonicalize-path (path)
   "Return a standardized version of PATH.
@@ -523,7 +527,7 @@ x:\\foo\\bar (i.e., Windows)."
   "Format the subexpression denoted by REG for GHCi commands."
   (pcase reg (`(,beg . (,end . nil))
               (format "%S %d %d %d %d %s"
-                      (dante-temp-file-name)
+                      (dante-temp-file-name (current-buffer))
                       (line-number-at-pos beg)
                       (dante--ghc-column-number-at-pos beg)
                       (line-number-at-pos end)
@@ -824,7 +828,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
           (line (string-to-number (match-string 2 string)))
           (col (string-to-number (match-string 3 string))))
       (xref-make nm (xref-make-file-location
-                     (if (string= file (dante-temp-file-name)) (buffer-file-name) file)
+                     (if (string= file (dante-temp-file-name (current-buffer))) (buffer-file-name) file)
                      line
                      (1- col))))))
 
