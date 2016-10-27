@@ -231,7 +231,7 @@ line as a type signature."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
 
-(defvar-local dante-loaded-file "-")
+(defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 
 (defun dante-async-load-current-buffer (&optional cont)
   "Load (interpreted) the temp buffer and run CONT."
@@ -291,14 +291,13 @@ CHECKER and BUFFER are added to each item parsed from STRING."
                           (concat file ":" location-raw ": x")))
                (line (plist-get location :line))
                (column (plist-get location :col)))
-          (setq messages ;; TODO: push
-                (cons (flycheck-error-new-at
-                       line column type
-                       msg
-                       :checker checker
-                       :buffer (when (string= temp-file file) buffer) ;; TODO: put other errors at the top somehow.
-                       :filename (dante-buffer-file-name buffer))
-                      messages)))
+          (push (flycheck-error-new-at line column type
+                                       msg
+                                       :checker checker
+                                       :buffer (when (string= temp-file file) buffer)
+                                       ;; TODO: report external errors somehow.
+                                       :filename (dante-buffer-file-name buffer))
+                messages))
         (forward-line -1))
       (delete-dups messages))))
 
