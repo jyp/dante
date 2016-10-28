@@ -245,13 +245,12 @@ line as a type signature."
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 
 (defun dante-async-load-current-buffer (&optional cont)
-  "Load (interpreted) the temp buffer and run CONT."
+  "Load the temp file for buffer and run CONT."
   (let ((fname (dante-temp-file)))
     (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer)) fname)
         (dante-async-call ":r" cont)
     (dante-async-call (concat ":l *" fname) cont)
-    ;; Note the * so that we collect the type info for the current
-    ;; module (also, probably faster.)
+    ;; FIXME: apparently the * is ignored when -fbytecode is set
     (with-current-buffer (dante-buffer) (setq dante-loaded-file fname)))))
 
 (defun dante-check (checker cont)
