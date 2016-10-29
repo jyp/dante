@@ -869,7 +869,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
 ;; Auto-fix
 
 (defcustom dante-suggestible-extensions
-  '("MultiParamTypeClasses" "RankNTypes" "DeriveGeneric" "DeriveFunctor" "DeriveFoldable" "GADTs" "FlexibleContexts" "FlexibleInstances" "ViewPatterns" "RecordWildcards" "TypeOperators" "TypeFamilies" "FunctionalDependencies" "ScopedTypeVariables")
+  '("MultiParamTypeClasses" "RankNTypes" "DeriveGeneric" "DeriveFunctor" "DeriveFoldable" "GADTs" "FlexibleContexts" "FlexibleInstances" "ViewPatterns" "RecordWildCards" "TypeOperators" "TypeFamilies" "FunctionalDependencies" "ScopedTypeVariables")
   "Language extensions that Dante will use to fix errors."
   :group 'dante
   :type '(list string))
