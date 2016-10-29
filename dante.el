@@ -128,13 +128,15 @@ to destroy the buffer and create a fresh one without this variable enabled.")
 
 (defun dante-state ()
   "Return dante-state for the current source buffer."
-  (buffer-local-value 'dante-state (dante-buffer-p)))
+  (if (dante-buffer-p)
+      (buffer-local-value 'dante-state (dante-buffer-p))
+    'stopped))
 
 (defun dante-status ()
   "Return dante-state for the current source buffer."
   (if (eq (dante-state) 'ready)
       (buffer-local-value 'dante-loaded-modules (dante-buffer-p))
-      (symbol-name (dante-state))))
+    (symbol-name (dante-state))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
