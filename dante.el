@@ -139,7 +139,7 @@ to destroy the buffer and create a fresh one without this variable enabled.")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
 
-(setq dante-debug '(queries)) ;; process, queries, command-line
+(setq dante-debug '(outputs responses)) ;; inputs, outputs, responses, command-line
 
 (defun dante-debug-info ()
   "Show debug info."
@@ -147,7 +147,7 @@ to destroy the buffer and create a fresh one without this variable enabled.")
   (if (dante-buffer-p)
       (with-current-buffer (dante-buffer-p)
     (message " Callbacks: %s\n State: %s\n Prompt %s\n"  (dante-buffer-p) dante-callbacks dante-state dante-loaded-modules))
-    (messsage "Dante not started (for this buffer)")))
+    (message "Dante not started (for this buffer)")))
 
 (defun dante-list-buffers ()
   "List hidden process buffers created by dante.
@@ -240,12 +240,13 @@ line as a type signature."
   "Load the temp file for buffer and run CONT."
   (let ((fname (dante-temp-file)))
     (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
+    (with-current-buffer (dante-buffer)
+      (setq dante-loaded-interpreted interpret))
     (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer)) fname)
         (dante-async-call ":r" cont)
-    (dante-async-call (concat ":l *" fname) cont)
-    ;; apparently the * is ignored when -fobject-code is set
-    (with-current-buffer (dante-buffer)
-      (setq dante-loaded-interpreted interpret)))))
+      (dante-async-call (concat ":l *" fname) cont)
+      ;; the * is ignored when -fobject-code is set
+      )))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
@@ -610,7 +611,7 @@ Guessed if the variable dante-repl-command-line is nil."
       (set-process-filter
        process
        (lambda (process string)
-         (when (memq 'process dante-debug)
+         (when (memq 'inputs dante-debug)
            (message "[Dante] <- %s" string))
          (when (buffer-live-p (process-buffer process))
            (with-current-buffer (process-buffer process)
@@ -627,7 +628,7 @@ Guessed if the variable dante-repl-command-line is nil."
     (forward-char)
     (message "GHCi: %s"
              (buffer-substring-no-properties (point) (point-at-eol)))))
-    
+
 (defun dante-async-call (cmd &optional callback)
   "Send GHCi the command string CMD.
 The result is passed to CALLBACK as (CALLBACK REPLY)."
@@ -641,7 +642,7 @@ The result is passed to CALLBACK as (CALLBACK REPLY)."
                                (list (list :func (or callback #'ignore)
                                            :source-buffer source-buffer
                                            :cmd cmd)))))
-               (when (memq 'process dante-debug)
+               (when (memq 'outputs dante-debug)
                  (message "[Dante] -> %s" cmd))
                (comint-simple-send (get-buffer-process buffer) cmd))
       (error "Dante: GHCi process is not running: run M-x dante-restart to start it"))))
@@ -706,8 +707,10 @@ You can always run M-x dante-restart to make it try again.
                    (dante--strip-carriage-returns (buffer-substring 1 (1- (match-beginning 1)))))))
         (delete-region 1 (point))
         (if callback
-            (progn (message (concat "Dante: => %s\n"
-                                    "       <= %s") (plist-get callback :cmd) string)
+            (progn (when (memq 'responses dante-debug)
+                     (message (concat "GHCi <= %s\n"
+                                      "     => %s")
+                                      (plist-get callback :cmd) string))
               (with-current-buffer (plist-get callback :source-buffer)
                 (set-dante-state 'ready)
                 (funcall (plist-get callback :func) string))
