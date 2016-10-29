@@ -90,7 +90,7 @@ Customize as a file or directory variable."
   :lighter (:eval (concat " Danté:" (dante-status)))
   :keymap dante-mode-map
   (if dante-mode
-      (progn (flycheck-select-checker 'dante)
+      (progn (flycheck-select-checker 'haskell-dante)
              (setq-local eldoc-documentation-function 'eldoc-dante))
       (progn (flycheck-select-checker 'haskell-ghc)
              (setq-local eldoc-documentation-function 'ignore))))
@@ -267,7 +267,7 @@ line as a type signature."
                                   (eq 'splice (flycheck-error-level msg)))
                                 msgs)))))))
 
-(flycheck-define-generic-checker 'dante
+(flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
 process."
   :start 'dante-check
