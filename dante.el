@@ -185,7 +185,7 @@ You can use this to kill them or look inside."
 With prefix argument INSERT, inserts the type above the current
 line as a type signature."
   (interactive "P")
-  (dante-async-load-current-buffer)
+  (dante-async-load-current-buffer nil)
   (let ((ty (dante-blocking-call
              (concat ":type-at " (dante--ghc-subexp (dante-thing-at-point))))))
     (if insert
@@ -219,47 +219,43 @@ line as a type signature."
 
 (defun dante-get-info-of (thing)
   "Get info for THING."
-  (dante-async-load-current-buffer)
+  (dante-async-load-current-buffer nil)
   (let ((optimistic-result
          (dante-blocking-call (format ":i %s" thing))))
     (if (string-match "^<interactive>" optimistic-result)
         ;; Load the module Interpreted so that we get information
-        (progn (dante-async-call  ":set -fbyte-code")
-               ;; ^^ Workaround for a bug of GHCi: info for external
-               ;; ids can be gotten only so
-               (dante-async-load-current-buffer)
-               (prog1
-                   (dante-blocking-call
-                    (format ":i %s" thing))
-                 (dante-async-call  ":set -fobject-code")))
+        (progn (dante-async-load-current-buffer t)
+               (dante-blocking-call
+                (format ":i %s" thing)))
       optimistic-result)))
 
 (defun dante-restart ()
   "Restart the process with the same configuration as before."
   (interactive)
-  (when (dante-buffer-p)
-    (dante-destroy)
-    (dante-buffer)))
+  (when (dante-buffer-p) (dante-destroy))
+  (dante-buffer))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
 
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 
-(defun dante-async-load-current-buffer (&optional cont)
+(defun dante-async-load-current-buffer (interpret &optional cont)
   "Load the temp file for buffer and run CONT."
   (let ((fname (dante-temp-file)))
+    (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
     (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer)) fname)
         (dante-async-call ":r" cont)
     (dante-async-call (concat ":l *" fname) cont)
-    ;; FIXME: apparently the * is ignored when -fbytecode is set
-    (with-current-buffer (dante-buffer) (setq dante-loaded-file fname)))))
+    ;; apparently the * is ignored when -fobject-code is set
+    (with-current-buffer (dante-buffer)
+      (setq dante-loaded-interpreted interpret)))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-state) 'dead)
       (run-with-timer 0 nil cont 'interrupted)
-    (dante-async-load-current-buffer
+    (dante-async-load-current-buffer nil
      (lambda (string)
        (let ((msgs (dante-parse-errors-warnings-splices
                     checker
@@ -602,7 +598,6 @@ x:\\foo\\bar (i.e., Windows)."
       (set-process-query-on-exit-flag process nil)
       (process-send-string process ":set -Wall\n") ;; TODO: configure
       (process-send-string process ":set +c\n") ;; collect type info
-      (process-send-string process ":set -fobject-code\n") ;; so that compilation results are cached
       (process-send-string process ":set prompt \"\\4%s|\"\n")
       (set-dante-state 'starting)
       (with-current-buffer buffer
@@ -847,13 +842,13 @@ Equivalent to 'warn', but label the warning as coming from dante."
                      (1- col))))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
-  (dante-async-load-current-buffer)
+  (dante-async-load-current-buffer nil)
   (let ((xref (dante--make-xref (dante-blocking-call (concat ":loc-at " symbol))
                                 "def")))
     (when xref (list xref))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
-  (dante-async-load-current-buffer)
+  (dante-async-load-current-buffer nil)
   (let* ((result (dante-blocking-call (concat ":uses " symbol)))
          (xref (dante--make-xref result "ref"))
          (refs nil))
@@ -908,8 +903,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
 (defun dante-eval-block ()
   "Evaluate the expression command found in {-> <expr> -} and insert the result."
   (interactive)
-  (dante-async-call  ":set -fbyte-code")
-  (dante-async-load-current-buffer)
+  (dante-async-load-current-buffer t)
   (save-excursion
     (beginning-of-line)
     (if (not (looking-at "{-> "))
@@ -923,8 +917,7 @@ Equivalent to 'warn', but label the warning as coming from dante."
         (skip-chars-backward "\t\n ")
         (delete-region (point) (- (search-forward "-}") 2))
         (backward-char 2)
-        (insert (concat "\n\n" res "\n")))))
-  (dante-async-call  ":set -fobject-code"))
+        (insert (concat "\n\n" res "\n"))))))
 
 (provide 'dante)
 
