@@ -586,7 +586,7 @@ x:\\foo\\bar (i.e., Windows)."
       (setq dante-repl-command-line
             (cl-case (dante-environment)
               (bare (list "cabal" "repl"))
-              (nix (list "nix-shell" "--run" "cabal" "repl"))
+              (nix (list "nix-shell" "--run" "cabal repl"))
               (stack '("stack" "repl"))))))
 
 (defun dante-start-process-in-buffer (buffer source-buffer)
