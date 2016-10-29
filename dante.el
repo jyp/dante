@@ -39,7 +39,6 @@
 ;;; Code:
 
 (require 'json)
-(require 'warnings)
 (require 'cl-lib)
 (require 'comint)
 (require 'eldoc)
@@ -58,8 +57,7 @@
 
 (defcustom dante-debug nil
   "Show debug output."
-  :group 'dante
-  :type 'boolean)
+  :group 'dante)
 
 (defcustom dante-repl-command-line nil
   "Command line to start GHCi.
@@ -141,17 +139,15 @@ to destroy the buffer and create a fresh one without this variable enabled.")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
 
-(defun dante-toggle-debug ()
-  "Toggle debugging mode on/off."
-  (interactive)
-  (setq dante-debug (not dante-debug))
-  (message "Dante debugging is: %s" (if dante-debug "ON" "OFF")))
+(setq dante-debug '(queries)) ;; process, queries, command-line
 
 (defun dante-debug-info ()
   "Show debug info."
   (interactive)
-  (with-current-buffer (dante-buffer-p)
-    (message " Buffer: %s\n Callbacks: %s\n State: %s\n Prompt %s\n"  (dante-buffer-p) dante-callbacks dante-state dante-loaded-modules)))
+  (if (dante-buffer-p)
+      (with-current-buffer (dante-buffer-p)
+    (message " Callbacks: %s\n State: %s\n Prompt %s\n"  (dante-buffer-p) dante-callbacks dante-state dante-loaded-modules))
+    (messsage "Dante not started (for this buffer)")))
 
 (defun dante-list-buffers ()
   "List hidden process buffers created by dante.
@@ -577,7 +573,8 @@ x:\\foo\\bar (i.e., Windows)."
    (t 'bare)))
 
 (defun dante-repl-command-line ()
-  "Wrap the command line CMD according to `dante-environment'."
+  "Return a suitable command line to run GHCi.
+Guessed if the variable dante-repl-command-line is nil."
   (or dante-repl-command-line
       (setq dante-repl-command-line
             (cl-case (dante-environment)
@@ -591,7 +588,7 @@ x:\\foo\\bar (i.e., Windows)."
       buffer
     (let* ((args (dante-repl-command-line))
            (process (with-current-buffer buffer
-                      (when dante-debug
+                      (when (memq 'command-line dante-debug)
                         (message "GHCi command line: %s" (combine-and-quote-strings args)))
                       (message "Dante: Starting GHCi ...")
                       (apply #'start-process "dante" buffer args))))
@@ -605,24 +602,32 @@ x:\\foo\\bar (i.e., Windows)."
         (fundamental-mode)
         (setq-local dante-repl-command-line args)
         (setq dante-callbacks
-              (list (list
-                     :source-buffer source-buffer
-                     :func (lambda (_msg)
-                             (message "Dante: GHCi ready")
-                             (set-dante-state 'ready))))))
+              (list (list :cmd "INITIAL"
+                          :source-buffer source-buffer
+                          :func (lambda (_msg)
+                                  (message "Dante: GHCi ready")
+                                  (set-dante-state 'ready))))))
       (set-process-filter
        process
        (lambda (process string)
-         (when dante-debug
+         (when (memq 'process dante-debug)
            (message "[Dante] <- %s" string))
          (when (buffer-live-p (process-buffer process))
            (with-current-buffer (process-buffer process)
              (goto-char (point-max))
              (insert string)
+             (dante-report-ghci-progress)
              (dante-read-buffer)))))
       (set-process-sentinel process 'dante-sentinel)
       buffer)))
 
+(defun dante-report-ghci-progress ()
+  (goto-char (point-max))
+  (when (search-backward "\n" nil t 2)
+    (forward-char)
+    (message "GHCi: %s"
+             (buffer-substring-no-properties (point) (point-at-eol)))))
+    
 (defun dante-async-call (cmd &optional callback)
   "Send GHCi the command string CMD.
 The result is passed to CALLBACK as (CALLBACK REPLY)."
@@ -636,7 +641,7 @@ The result is passed to CALLBACK as (CALLBACK REPLY)."
                                (list (list :func (or callback #'ignore)
                                            :source-buffer source-buffer
                                            :cmd cmd)))))
-               (when dante-debug
+               (when (memq 'process dante-debug)
                  (message "[Dante] -> %s" cmd))
                (comint-simple-send (get-buffer-process buffer) cmd))
       (error "Dante: GHCi process is not running: run M-x dante-restart to start it"))))
@@ -701,13 +706,14 @@ You can always run M-x dante-restart to make it try again.
                    (dante--strip-carriage-returns (buffer-substring 1 (1- (match-beginning 1)))))))
         (delete-region 1 (point))
         (if callback
-            (progn (with-current-buffer (plist-get callback :source-buffer)
-                     (set-dante-state 'ready)
-                     (funcall (plist-get callback :func) string))
-                   (dante-read-buffer))
-          (when dante-debug
-            (dante--warn "Received output but no callback in `dante-callbacks': %S"
-                         string))))))
+            (progn (message (concat "Dante: => %s\n"
+                                    "       <= %s") (plist-get callback :cmd) string)
+              (with-current-buffer (plist-get callback :source-buffer)
+                (set-dante-state 'ready)
+                (funcall (plist-get callback :func) string))
+              (dante-read-buffer))
+          (insert "Received output but no callback in `dante-callbacks'")
+          (dante-show-process-problem nil)))))
 
 (defun dante--strip-carriage-returns (string)
   "Strip the \\r from Windows \\r\\n line endings in STRING."
@@ -812,11 +818,6 @@ a list is returned instead of failing with a nil result."
      ((= (length cabal-files) 1) (car cabal-files)) ;; exactly one candidate found
      (allow-multiple cabal-files) ;; pass-thru multiple candidates
      (t nil))))
-
-(defun dante--warn (message &rest args)
-  "Display a warning message made from (format MESSAGE ARGS...).
-Equivalent to 'warn', but label the warning as coming from dante."
-  (display-warning 'dante (apply 'format message args) :warning))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; xref support
