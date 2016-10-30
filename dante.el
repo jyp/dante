@@ -40,11 +40,10 @@
 
 (require 'json)
 (require 'cl-lib)
-(require 'comint)
 (require 'eldoc)
 (require 'dash)
 (require 'xref)
-(require 'flycheck)
+;; (require 'flycheck)
 (eval-when-compile
   (require 'wid-edit))
 
@@ -88,10 +87,8 @@ Customize as a file or directory variable."
   :lighter (:eval (concat " Danté:" (dante-status)))
   :keymap dante-mode-map
   (if dante-mode
-      (progn (flycheck-select-checker 'haskell-dante)
-             (setq-local eldoc-documentation-function 'eldoc-dante))
-      (progn (flycheck-select-checker 'haskell-ghc)
-             (setq-local eldoc-documentation-function 'ignore))))
+      (progn (flycheck-select-checker 'haskell-dante))
+      (progn (flycheck-select-checker 'haskell-ghc))))
 
 (define-key dante-mode-map (kbd "C-c C-x C-r") 'dante-restart)
 (define-key dante-mode-map (kbd "C-c C-t") 'dante-type-at)
@@ -108,10 +105,8 @@ Customize as a file or directory variable."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Buffer-local variables/state
 
-(defvar-local dante-callbacks nil
-  "List of callbacks waiting for output.
-This variable is a FIFO list.")
-
+(defvar-local dante-queue nil "List of ready GHCi queries.")
+(defvar-local dante-callback nil "Callback waiting for output.")
 (defvar-local dante-package-name nil
   "The package name associated with the current buffer.")
 
@@ -131,7 +126,7 @@ to destroy the buffer and create a fresh one without this variable enabled.")
     'stopped))
 
 (defun dante-status ()
-  "Return dante-state for the current source buffer."
+  "Return dante's status for the current source buffer."
   (if (eq (dante-state) 'ready)
       (buffer-local-value 'dante-loaded-modules (dante-buffer-p))
     (symbol-name (dante-state))))
@@ -139,14 +134,15 @@ to destroy the buffer and create a fresh one without this variable enabled.")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
 
-(setq dante-debug '(outputs responses)) ;; inputs, outputs, responses, command-line
+(setq dante-debug nil) ;; inputs, outputs, responses, command-line
+(defvar-local dante-loaded-modules "")
 
 (defun dante-debug-info ()
   "Show debug info."
   (interactive)
   (if (dante-buffer-p)
       (with-current-buffer (dante-buffer-p)
-    (message " Callbacks: %s\n State: %s\n Prompt %s\n"  (dante-buffer-p) dante-callbacks dante-state dante-loaded-modules))
+    (message " Callback: %s\nQueue: %s\n State: %s\n Loaded: %s\n" dante-callback dante-queue dante-state dante-loaded-modules))
     (message "Dante not started (for this buffer)")))
 
 (defun dante-list-buffers ()
@@ -175,28 +171,25 @@ You can use this to kill them or look inside."
       (font-lock-ensure)
       (buffer-string))))
 
-(defun dante-type-at (insert)
-  "Get the type of the thing or selection at point.
-
-With prefix argument INSERT, inserts the type above the current
-line as a type signature."
-  (interactive "P")
-  (dante-async-load-current-buffer nil)
-  (let ((ty (dante-blocking-call
-             (concat ":type-at " (dante--ghc-subexp (dante-thing-at-point))))))
-    (if insert
-        (save-excursion
-          (goto-char (line-beginning-position))
-          (insert (dante-fontify-expression ty) "\n"))
-      (message "%s" (dante-fontify-expression ty)))))
+(defun dante-type-at ()
+  "Get the type of the thing or selection at point."
+  (interactive)
+  (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
+  (dante-async-load-current-buffer nil
+   (lambda (_)
+     (dante-async-call
+      (concat ":type-at " tap)
+      (lambda (ty)
+        (message "%s" (dante-fontify-expression ty))))))))
 
 (defun dante-info (ident)
   "Get the info about the IDENT at point."
   (interactive (list (dante-ident-at-point)))
   (let ((package (dante-package-name))
-        (info (dante-get-info-of ident))
         (help-xref-following nil)
         (origin (buffer-name)))
+    (dante-get-info-of ident
+     (lambda (info)
     (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                      (called-interactively-p 'interactive))
     (save-excursion
@@ -211,42 +204,41 @@ line as a type signature."
              " (" package ")"
              "\n\n"
              (dante-fontify-expression info))
-            (goto-char (point-min))))))))
+            (goto-char (point-min))))))))))
 
-(defun dante-get-info-of (thing)
-  "Get info for THING."
-  (dante-async-load-current-buffer nil)
-  (let ((optimistic-result
-         (dante-blocking-call (format ":i %s" thing))))
-    (if (string-match "^<interactive>" optimistic-result)
-        ;; Load the module Interpreted so that we get information
-        (progn (dante-async-load-current-buffer t)
-               (dante-blocking-call
-                (format ":i %s" thing)))
-      optimistic-result)))
+(defun dante-get-info-of (thing cont)
+  "Get info for THING and pass it to CONT."
+  (dante-async-load-current-buffer t
+   (lambda (_load-messages)
+     (dante-async-call (format ":i %s" thing) cont))))
 
 (defun dante-restart ()
   "Restart the process with the same configuration as before."
   (interactive)
   (when (dante-buffer-p) (dante-destroy))
-  (dante-start #'ignore))
+  (dante-start (lambda (_buffer done) (funcall done))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
 
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
+(defvar-local dante-loaded-interpreted nil)
 
-(defun dante-async-load-current-buffer (interpret &optional cont)
-  "Load the temp file for buffer and run CONT."
+(defun dante-async-load-current-buffer (interpret cont)
+  "Load and maybe INTERPRET the temp file for buffer it and run CONT in a session."
   (let ((fname (dante-temp-file)))
-    (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
-    (with-current-buffer (dante-buffer-p)
-      (setq dante-loaded-interpreted interpret))
-    (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer-p)) fname)
-        (dante-async-call ":r" cont)
-      (dante-async-call (concat ":l *" fname) cont)
-      ;; the * is ignored when -fobject-code is set
-      )))
+    (dante-start
+     (lambda (buffer done)
+       (dante-async-call
+        (if interpret ":set -fbyte-code" ":set -fobject-code")
+        (lambda (_)
+          (with-current-buffer buffer (setq dante-loaded-interpreted interpret))
+          (dante-async-call
+           (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
+               ":r" (concat ":l *" fname))
+           (lambda (load-message)
+             (funcall cont load-message)
+             (funcall done)))))))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
@@ -345,78 +337,6 @@ CHECKER and BUFFER are added to each item parsed from STRING."
 (defun dante-call-in-buffer (buffer func &rest args)
   "In BUFFER, call FUNC with ARGS."
   (with-current-buffer buffer (apply func args)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ELDoc integration
-
-(defvar-local eldoc-dante-cache (make-hash-table :test 'equal)
-  "Cache for types of regions, used by `eldoc-dante'.
-This is not for saving on requests (we make a request even if
-something is in cache, overwriting the old entry), but rather for
-making types show immediately when we do have them cached.")
-
-(defun eldoc-dante-maybe-print (msg)
-  "Print MSG with eldoc if eldoc would display a message now.
-Like `eldoc-print-current-symbol-info', but just printing MSG
-instead of using `eldoc-documentation-function'."
-  (with-demoted-errors "eldoc error: %s"
-    (and (or (eldoc-display-message-p)
-             ;; Erase the last message if we won't display a new one.
-             (when eldoc-last-message
-               (eldoc-message nil)
-               nil))
-         (eldoc-message msg))))
-
-(defun eldoc-dante ()
-  "ElDoc backend for dante."
-  (let ((pos (dante-thing-at-point)))
-    (when pos
-      (dante-async-call
-       (concat ":type-at " (dante--ghc-subexp pos))
-         (lambda (ty)
-           (let ((response-status (dante-haskell-utils-repl-response-error-status ty)))
-             (if (eq 'no-error response-status)
-               (let ((msg (dante-fontify-expression
-                           (replace-regexp-in-string "[ \n]+" " " ty))))
-                 ;; Got an updated type-at-point, cache and print now:
-                 (puthash pos msg eldoc-dante-cache)
-                 (eldoc-dante-maybe-print msg))
-               ;; But if we're seeing errors, invalidate cache-at-point:
-               (remhash pos eldoc-dante-cache)))))
-  ;; If we have something cached at point, print that first:
-  (gethash pos eldoc-dante-cache))))
-
-(defun dante-haskell-utils-repl-response-error-status (response)
-  "Parse response REPL's RESPONSE for errors.
-Returns one of the following symbols:
-
-+ unknown-command
-+ option-missing
-+ interactive-error
-+ no-error
-
-*Warning*: this funciton covers only three kind of responses:
-
-* \"unknown command …\"
-  REPL missing requested command
-* \"<interactive>:3:5: …\"
-  interactive REPL error
-* \"Couldn't guess that module name. Does it exist?\"
-  (:type-at and maybe some other commands error)
-* *all other reposnses* are treated as success reposneses and
-  'no-error is returned."
-  (let ((first-line (car (split-string response "\n" t))))
-    (cond
-     ((null first-line) 'no-error)
-     ((string-match-p "^unknown command" first-line)
-      'unknown-command)
-     ((string-match-p
-       "^Couldn't guess that module name. Does it exist?"
-       first-line)
-      'option-missing)
-     ((string-match-p "^<interactive>:" first-line)
-      'interactive-error)
-     (t 'no-error))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -552,19 +472,25 @@ x:\\foo\\bar (i.e., Windows)."
         (delete-process (get-buffer-process (current-buffer))))
       (kill-buffer (current-buffer)))))
 
-(defun dante-blocking-call (cmd)
-  "Send GHCi the command string CMD and block pending its result."
+(defun blocking-call (cont)
+  "Call CONT as (CONT K) and block until (K res) is called, then return res."
   (let ((result nil))
-    (dante-async-call cmd (lambda (reply) (setq result reply)))
+    (funcall cont (lambda (reply) (setq result reply)))
     (while (not result) (sleep-for 0.001))
     result))
 
-(defun dante-start (cont) ;; rename to "with-dante"
-  "Get the GHCi buffer for the current (source) buffer."
-  (let ((buffer (dante-get-buffer-create)))
-    (if (get-buffer-process buffer) ;; TODO: test process-live-p
-        (funcall cont buffer)
-      (dante-start-process-in-buffer buffer (current-buffer) cont))))
+(defun dante-start (cont) ;; TODO: rename to "dante-session"
+  "Run the CONT in a valid GHCi session for the current (source) buffer.
+CONT is called as (CONT process-buffer done).  CONT must call done
+when it is done."
+  (let ((source-buffer (current-buffer))
+        (buffer (dante-get-buffer-create)))
+    (push (list :func cont :source-buffer source-buffer)
+          dante-queue)
+    ;; TODO: test process-live-p
+    (if (get-buffer-process buffer)
+        (dante-schedule-next buffer)
+      (dante-start-process-in-buffer buffer source-buffer))))
 
 (defun dante-environment ()
   "Guess the project environment."
@@ -577,13 +503,13 @@ x:\\foo\\bar (i.e., Windows)."
   "Return a suitable command line to run GHCi.
 Guessed if the variable dante-repl-command-line is nil."
   (or dante-repl-command-line
-      (setq dante-repl-command-line
+      (setq-local dante-repl-command-line
             (cl-case (dante-environment)
               (bare (list "cabal" "repl"))
               (nix (list "nix-shell" "--run" "cabal repl"))
               (stack '("stack" "repl"))))))
 
-(defun dante-start-process-in-buffer (buffer source-buffer cont)
+(defun dante-start-process-in-buffer (buffer source-buffer)
   "Start a Dante worker in BUFFER for SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
@@ -594,21 +520,18 @@ Guessed if the variable dante-repl-command-line is nil."
                       (message "Dante: Starting GHCi ...")
                       (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
-      (process-send-string process ":set -Wall\n") ;; TODO: configure
-      (process-send-string process ":set +c\n") ;; collect type info
-      (process-send-string process ":set prompt \"\\4%s|\"\n")
-      (set-dante-state 'starting)
       (with-current-buffer buffer
         (erase-buffer)
-        (fundamental-mode)
-        (setq-local dante-repl-command-line args)
-        (setq dante-callbacks
-              (list (list :cmd "INITIAL"
-                          :source-buffer source-buffer
-                          :func (lambda (_msg)
-                                  (message "Dante: GHCi ready")
-                                  (set-dante-state 'ready)
-                                  (funcall cont buffer))))))
+        (setq dante-callback nil) ;; todo: necessary?
+        (setq-local dante-repl-command-line args))
+      (with-current-buffer source-buffer
+        (set-dante-state 'starting)
+        (dante-async-call
+         (concat ":set -Wall\n" ;; TODO: configure
+                 ":set +c\n" ;; collect type info
+                 ":set prompt \"\\4%s|\"")
+         (lambda (_start-messages) (message "GHCi started!")
+           (dante-schedule-next buffer))))
       (set-process-filter
        process
        (lambda (process string)
@@ -630,21 +553,17 @@ Guessed if the variable dante-repl-command-line is nil."
     (message "GHCi: %s"
              (buffer-substring-no-properties (point) (point-at-eol)))))
 
-(defun dante-async-call (cmd &optional callback)
+(defun dante-async-call (cmd callback)
   "Send GHCi the command string CMD.
-The result is passed to CALLBACK as (CALLBACK REPLY)."
-  (let ((source-buffer (current-buffer)))
-    (dante-start
-     (lambda (buffer)
-       (progn (set-dante-state 'busy)
-              (with-current-buffer buffer
-                (setq dante-callbacks
-                      (append dante-callbacks
-                              (list (list :func (or callback #'ignore)
-                                          :source-buffer source-buffer
-                                          :cmd cmd)))))
-              (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
-              (comint-simple-send (get-buffer-process buffer) cmd))))))
+The result is passed to CALLBACK as (CALLBACK REPLY).  Can only be
+called from a valid session."
+  (let ((source-buffer (current-buffer))
+        (buffer (dante-buffer-p)))
+    (with-current-buffer buffer
+      (when dante-callback (error "Try to set a callback (%s ~> %s)\n... but one exists already! (%s)" cmd callback dante-callback))
+      (when (memq 'outputs dante-debug) (message "[Dante%s] -> %s" buffer cmd))
+      (setq dante-callback (list :cmd cmd :func callback :source-buffer source-buffer))
+      (process-send-string (get-buffer-process buffer) (concat cmd "\n")))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -694,14 +613,13 @@ You can always run M-x dante-restart to make it try again.
 ")
     'face 'compilation-error)))
 
-(defvar-local dante-loaded-modules "")
 
 (defun dante-read-buffer ()
   "In the process buffer, we read what's in it."
   (goto-char 1)
   (when (search-forward-regexp "\4\\(.*\\)|" nil t 1)
     (setq dante-loaded-modules (match-string 1))
-    (let ((callback (pop dante-callbacks))
+    (let ((callback dante-callback)
           (string (dante--kill-last-newline
                    (dante--strip-carriage-returns (buffer-substring 1 (1- (match-beginning 1)))))))
         (delete-region 1 (point))
@@ -710,12 +628,21 @@ You can always run M-x dante-restart to make it try again.
                      (message (concat "GHCi <= %s\n"
                                       "     => %s")
                                       (plist-get callback :cmd) string))
-              (with-current-buffer (plist-get callback :source-buffer)
-                (set-dante-state 'ready)
-                (funcall (plist-get callback :func) string))
-              (dante-read-buffer))
-          (insert "Received output but no callback in `dante-callbacks'")
-          (dante-show-process-problem nil)))))
+                   (setq dante-callback nil)
+                   (with-current-buffer (plist-get callback :source-buffer)
+                     (funcall (plist-get callback :func) string)))
+          (error "Received output in %s (%s) but no callback" (current-buffer) string)))))
+
+(defun dante-schedule-next (buffer)
+  "Run the next GHCi sub-session for BUFFER, if any."
+  (unless dante-callback
+    (let ((req (pop dante-queue)))
+      (if (not req)
+          (set-dante-state 'ready)
+        (set-dante-state 'busy)
+        (with-current-buffer (plist-get req :source-buffer)
+          (funcall (plist-get req :func) buffer
+                   (apply-partially #'dante-schedule-next buffer)))))))
 
 (defun dante--strip-carriage-returns (string)
   "Strip the \\r from Windows \\r\\n line endings in STRING."
@@ -740,6 +667,7 @@ Uses the directory of the current buffer for context."
     (with-current-buffer
         (get-buffer-create buffer-name)
       (setq dante-package-name package-name)
+      (fundamental-mode)
       (cd default-directory)
       (current-buffer))))
 
@@ -761,7 +689,7 @@ Uses the directory of the current buffer for context."
 (defun dante-project-root ()
   "Get the directory where the .cabal file is placed."
   (or dante-project-root
-      (setq dante-project-root
+      (setq-local dante-project-root
             (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name))))))
 
 (defun dante-package-name (&optional cabal-file)
@@ -845,21 +773,30 @@ a list is returned instead of failing with a nil result."
                      (1- col))))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
-  (dante-async-load-current-buffer nil)
-  (let ((xref (dante--make-xref (dante-blocking-call (concat ":loc-at " symbol))
-                                "def")))
-    (when xref (list xref))))
+  (blocking-call
+   (lambda (ret)
+     (dante-async-load-current-buffer nil
+      (lambda (_load-messages)
+        (dante-async-call (concat ":loc-at " symbol)
+         (lambda (target)
+           (let ((xref (dante--make-xref target "def")))
+             (funcall ret (when xref (list xref)))))))))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
-  (dante-async-load-current-buffer nil)
-  (let* ((result (dante-blocking-call (concat ":uses " symbol)))
-         (xref (dante--make-xref result "ref"))
-         (refs nil))
-    (while xref
-      (setq result (substring result (match-end 0)))
-      (push xref refs)
-      (setq xref (dante--make-xref result "ref")))
-    (nreverse refs)))
+  (blocking-call
+   (lambda (ret)
+     (dante-async-load-current-buffer nil
+      (lambda (_load-messages)
+        (dante-async-call (concat ":uses " symbol)
+         (lambda (result)
+           (let* ((xref (dante--make-xref result "ref"))
+                  (refs nil))
+             (while xref
+               (setq result (substring result (match-end 0)))
+               (push xref refs)
+               (setq xref (dante--make-xref result "ref")))
+             (funcall ret (nreverse refs))))))))))
+
 
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
@@ -906,7 +843,6 @@ a list is returned instead of failing with a nil result."
 (defun dante-eval-block ()
   "Evaluate the expression command found in {-> <expr> -} and insert the result."
   (interactive)
-  (dante-async-load-current-buffer t)
   (save-excursion
     (beginning-of-line)
     (if (not (looking-at "{-> "))
@@ -914,13 +850,18 @@ a list is returned instead of failing with a nil result."
       (let* ((beg (+ 4 (point)))
              (end (if (search-forward "-}" (line-end-position) t)
                       (- (point) 2)
-                    (line-end-position)))
-             (res (dante-blocking-call (buffer-substring-no-properties beg end))))
-        (goto-char end)
-        (skip-chars-backward "\t\n ")
-        (delete-region (point) (- (search-forward "-}") 2))
-        (backward-char 2)
-        (insert (concat "\n\n" res "\n"))))))
+                    (line-end-position))))
+        ;; TODO: save a mark
+        (dante-async-load-current-buffer
+         t
+         (lambda (_load-messages)
+           (dante-async-call (buffer-substring-no-properties beg end)
+            (lambda (res)
+             (goto-char end)
+             (skip-chars-backward "\t\n ")
+             (delete-region (point) (- (search-forward "-}") 2))
+             (backward-char 2)
+             (insert (concat "\n\n" res "\n"))))))))))
 
 (provide 'dante)
 
