@@ -229,7 +229,7 @@ line as a type signature."
   "Restart the process with the same configuration as before."
   (interactive)
   (when (dante-buffer-p) (dante-destroy))
-  (dante-buffer))
+  (dante-start #'ignore))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck integration
@@ -240,9 +240,9 @@ line as a type signature."
   "Load the temp file for buffer and run CONT."
   (let ((fname (dante-temp-file)))
     (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
-    (with-current-buffer (dante-buffer)
+    (with-current-buffer (dante-buffer-p)
       (setq dante-loaded-interpreted interpret))
-    (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer)) fname)
+    (if (string-equal (buffer-local-value 'dante-loaded-file (dante-buffer-p)) fname)
         (dante-async-call ":r" cont)
       (dante-async-call (concat ":l *" fname) cont)
       ;; the * is ignored when -fobject-code is set
@@ -559,12 +559,12 @@ x:\\foo\\bar (i.e., Windows)."
     (while (not result) (sleep-for 0.001))
     result))
 
-(defun dante-buffer ()
+(defun dante-start (cont) ;; rename to "with-dante"
   "Get the GHCi buffer for the current (source) buffer."
   (let ((buffer (dante-get-buffer-create)))
-    (if (get-buffer-process buffer)
-        buffer
-      (dante-start-process-in-buffer buffer (current-buffer)))))
+    (if (get-buffer-process buffer) ;; TODO: test process-live-p
+        (funcall cont buffer)
+      (dante-start-process-in-buffer buffer (current-buffer) cont))))
 
 (defun dante-environment ()
   "Guess the project environment."
@@ -583,7 +583,7 @@ Guessed if the variable dante-repl-command-line is nil."
               (nix (list "nix-shell" "--run" "cabal repl"))
               (stack '("stack" "repl"))))))
 
-(defun dante-start-process-in-buffer (buffer source-buffer)
+(defun dante-start-process-in-buffer (buffer source-buffer cont)
   "Start a Dante worker in BUFFER for SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
@@ -607,7 +607,8 @@ Guessed if the variable dante-repl-command-line is nil."
                           :source-buffer source-buffer
                           :func (lambda (_msg)
                                   (message "Dante: GHCi ready")
-                                  (set-dante-state 'ready))))))
+                                  (set-dante-state 'ready)
+                                  (funcall cont buffer))))))
       (set-process-filter
        process
        (lambda (process string)
@@ -632,20 +633,18 @@ Guessed if the variable dante-repl-command-line is nil."
 (defun dante-async-call (cmd &optional callback)
   "Send GHCi the command string CMD.
 The result is passed to CALLBACK as (CALLBACK REPLY)."
-  (let ((source-buffer (current-buffer))
-        (buffer (dante-buffer)))
-    (if (and buffer (process-live-p (get-buffer-process buffer)))
-        (progn (set-dante-state 'busy)
-               (with-current-buffer buffer
-                 (setq dante-callbacks
-                       (append dante-callbacks
-                               (list (list :func (or callback #'ignore)
-                                           :source-buffer source-buffer
-                                           :cmd cmd)))))
-               (when (memq 'outputs dante-debug)
-                 (message "[Dante] -> %s" cmd))
-               (comint-simple-send (get-buffer-process buffer) cmd))
-      (error "Dante: GHCi process is not running: run M-x dante-restart to start it"))))
+  (let ((source-buffer (current-buffer)))
+    (dante-start
+     (lambda (buffer)
+       (progn (set-dante-state 'busy)
+              (with-current-buffer buffer
+                (setq dante-callbacks
+                      (append dante-callbacks
+                              (list (list :func (or callback #'ignore)
+                                          :source-buffer source-buffer
+                                          :cmd cmd)))))
+              (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
+              (comint-simple-send (get-buffer-process buffer) cmd))))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
