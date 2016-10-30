@@ -898,7 +898,7 @@ a list is returned instead of failing with a nil result."
            ((string-match "The import of ‘.*’ is redundant" msg)
             (beginning-of-line)
             (delete-region (point) (progn (next-logical-line) (point))))
-           (t (message "Cannot fix the issue at point automatically"))))))))
+           (t (message "Cannot fix the issue at point automatically. Perhaps customize `dante-suggestible-extensions'."))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
