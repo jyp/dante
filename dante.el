@@ -43,9 +43,26 @@
 (require 'eldoc)
 (require 'dash)
 (require 'xref)
-;; (require 'flycheck)
+(require 'flycheck)
 (eval-when-compile
   (require 'wid-edit))
+
+(defmacro cps-bind (vars expr &rest body)
+  "Bind VARS in a continuation passed to EXPR with contents BODY.
+So (cps-bind x (fun arg) body) expands to (fun arg (λ (x) body))"
+  (declare (indent 2))
+  (if (listp vars)
+      `(,@expr (lambda ,vars ,@body))
+  `(,@expr (lambda (,vars) ,@body))))
+
+(defmacro cps-let (bindings &rest body)
+"Expand multiple BINDINGS and call BODY as a continuation.
+Example: (cps-let ((x (fun1 arg1)) (y z (fun2 arg2))) body)
+expands to: (fun1 arg1 (λ (x) (fun2 arg2 (λ (x y) body))))."
+  (declare (indent 1))
+  (pcase bindings
+    (`((,vars ,expr)) `(cps-bind ,vars ,expr ,@body))
+    (`((,vars ,expr) . ,rest) `(cps-bind ,vars ,expr (cps-let ,rest ,@body)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Configuration
@@ -175,12 +192,9 @@ You can use this to kill them or look inside."
   "Get the type of the thing or selection at point."
   (interactive)
   (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
-  (dante-async-load-current-buffer nil
-   (lambda (_)
-     (dante-async-call
-      (concat ":type-at " tap)
-      (lambda (ty)
-        (message "%s" (dante-fontify-expression ty))))))))
+    (cps-let ((_load-messages (dante-async-load-current-buffer nil))
+              (ty (dante-async-call (concat ":type-at " tap))))
+      (message "%s" (dante-fontify-expression ty)))))
 
 (defun dante-info (ident)
   "Get the info about the IDENT at point."
@@ -188,29 +202,20 @@ You can use this to kill them or look inside."
   (let ((package (dante-package-name))
         (help-xref-following nil)
         (origin (buffer-name)))
-    (dante-get-info-of ident
-     (lambda (info)
-    (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
-                     (called-interactively-p 'interactive))
-    (save-excursion
-      (let ((help-xref-following nil))
-        (with-help-window (help-buffer)
-          (with-current-buffer (help-buffer)
-            (insert
-             (dante-fontify-expression ident)
-             " in `"
-             origin
-             "'"
-             " (" package ")"
-             "\n\n"
-             (dante-fontify-expression info))
-            (goto-char (point-min))))))))))
-
-(defun dante-get-info-of (thing cont)
-  "Get info for THING and pass it to CONT."
-  (dante-async-load-current-buffer t
-   (lambda (_load-messages)
-     (dante-async-call (format ":i %s" thing) cont))))
+    (cps-let ((_load-message (dante-async-load-current-buffer t))
+              (info (dante-async-call (format ":i %s" ident))))
+      (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
+                       (called-interactively-p 'interactive))
+      (save-excursion
+        (let ((help-xref-following nil))
+          (with-help-window (help-buffer)
+            (with-current-buffer (help-buffer)
+              (insert
+               (dante-fontify-expression ident)
+               " in `" origin "'" " (" package ")"
+               "\n\n"
+               (dante-fontify-expression info))
+              (goto-char (point-min)))))))))
 
 (defun dante-restart ()
   "Restart the process with the same configuration as before."
@@ -227,34 +232,30 @@ You can use this to kill them or look inside."
 (defun dante-async-load-current-buffer (interpret cont)
   "Load and maybe INTERPRET the temp file for buffer it and run CONT in a session."
   (let ((fname (dante-temp-file)))
-    (dante-start
-     (lambda (buffer done)
-       (dante-async-call
-        (if interpret ":set -fbyte-code" ":set -fobject-code")
-        (lambda (_)
-          (with-current-buffer buffer (setq dante-loaded-interpreted interpret))
-          (dante-async-call
-           (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
-               ":r" (concat ":l *" fname))
-           (lambda (load-message)
-             (funcall cont load-message)
-             (funcall done)))))))))
+    (cps-let (((buffer done) (dante-start))
+              (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
+              (load-message
+               (dante-async-call
+                (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
+                    ":r" (concat ":l *" fname)))))
+      (with-current-buffer buffer (setq dante-loaded-interpreted interpret))
+      (funcall cont load-message)
+      (funcall done))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-state) 'dead)
       (run-with-timer 0 nil cont 'interrupted)
-    (dante-async-load-current-buffer nil
-     (lambda (string)
-       (let ((msgs (dante-parse-errors-warnings-splices
-                    checker
-                    (current-buffer)
-                    string)))
-         (funcall cont
-                  'finished
-                  (cl-remove-if (lambda (msg)
-                                  (eq 'splice (flycheck-error-level msg)))
-                                msgs)))))))
+    (cps-let ((string (dante-async-load-current-buffer nil)))
+      (let ((msgs (dante-parse-errors-warnings-splices
+                   checker
+                   (current-buffer)
+                   string)))
+        (funcall cont
+                 'finished
+                 (cl-remove-if (lambda (msg)
+                                 (eq 'splice (flycheck-error-level msg)))
+                               msgs))))))
 
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
@@ -547,6 +548,7 @@ Guessed if the variable dante-repl-command-line is nil."
       buffer)))
 
 (defun dante-report-ghci-progress ()
+  "In the dante buffer, look for GHCi process and inform the user."
   (goto-char (point-max))
   (when (search-backward "\n" nil t 2)
     (forward-char)
@@ -773,30 +775,23 @@ a list is returned instead of failing with a nil result."
                      (1- col))))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
-  (blocking-call
-   (lambda (ret)
-     (dante-async-load-current-buffer nil
-      (lambda (_load-messages)
-        (dante-async-call (concat ":loc-at " symbol)
-         (lambda (target)
-           (let ((xref (dante--make-xref target "def")))
-             (funcall ret (when xref (list xref)))))))))))
+  (cps-let ((ret (blocking-call))
+            (_load-messages (dante-async-load-current-buffer nil))
+            (target (dante-async-call (concat ":loc-at " symbol))))
+    (let ((xref (dante--make-xref target "def")))
+      (funcall ret (when xref (list xref))))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
-  (blocking-call
-   (lambda (ret)
-     (dante-async-load-current-buffer nil
-      (lambda (_load-messages)
-        (dante-async-call (concat ":uses " symbol)
-         (lambda (result)
-           (let* ((xref (dante--make-xref result "ref"))
-                  (refs nil))
-             (while xref
-               (setq result (substring result (match-end 0)))
-               (push xref refs)
-               (setq xref (dante--make-xref result "ref")))
-             (funcall ret (nreverse refs))))))))))
-
+  (cps-let ((ret (blocking-call))
+            (_load-messages (dante-async-load-current-buffer nil))
+            (result (dante-async-call (concat ":uses " symbol))))
+    (let* ((xref (dante--make-xref result "ref"))
+           (refs nil))
+      (while xref
+        (setq result (substring result (match-end 0)))
+        (push xref refs)
+        (setq xref (dante--make-xref result "ref")))
+      (funcall ret (nreverse refs)))))
 
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
@@ -852,16 +847,13 @@ a list is returned instead of failing with a nil result."
                       (- (point) 2)
                     (line-end-position))))
         ;; TODO: save a mark
-        (dante-async-load-current-buffer
-         t
-         (lambda (_load-messages)
-           (dante-async-call (buffer-substring-no-properties beg end)
-            (lambda (res)
+        (cps-let ((_load-messages (dante-async-load-current-buffer t))
+                  (res (dante-async-call (buffer-substring-no-properties beg end))))
              (goto-char end)
              (skip-chars-backward "\t\n ")
              (delete-region (point) (- (search-forward "-}") 2))
              (backward-char 2)
-             (insert (concat "\n\n" res "\n"))))))))))
+             (insert (concat "\n\n" res "\n")))))))
 
 (provide 'dante)
 
