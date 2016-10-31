@@ -2,15 +2,16 @@
 
 [[http://stable.melpa.org/packages/dante-badge.svg]]
 
-Dante is a fork of the excellent Intero mode, but which aims for light
-weightedness. Dante has no dependency on "Stack" nor on any custom
-Haskell code. Dante's Emacs code is about half as long as that of Intero.
+Dante is a fork of Intero mode. It steals many good ideas from Intero,
+it aims for light weightedness. Dante has no dependency on "Stack" nor
+on any custom Haskell code. Dante's Emacs code is about half as long
+as that of Intero. Flychecking is optional (yet recommended).
 
 ** Features
 
 | Feature                                 | How to use                   |
 |-----------------------------------------+------------------------------|
-| Flycheck type checking                  | enable (flycheck-mode)       |
+| Flycheck type checking                  | enable flycheck-mode         |
 | Type of selection                       | C-c C-t                      |
 | Info at point                           | C-c C-i                      |
 | Apply Ghc suggestion for error at point | C-c C-a                      |
@@ -45,9 +46,10 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
 #+BEGIN_SRC elisp
   (use-package dante
     :ensure t
-    :commands 'turn-on-dante-mode
+    :commands 'dante-mode
     :init
-    (add-hook 'haskell-mode-hook 'turn-on-dante-mode)))
+    (add-hook 'haskell-mode-hook 'dante-mode)
+    (add-hook 'haskell-mode-hook 'flycheck-mode))
 #+END_SRC
 
 You may want to be sure not to enable ~(interactive-haskell-mode)~ so

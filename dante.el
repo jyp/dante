@@ -91,19 +91,59 @@ Customize as a file or directory variable."
   :group 'dante
   :type '(choice (const nil) string))
 
+(defun dante-project-root ()
+  "Get the directory where the .cabal file is placed."
+  (or dante-project-root
+      (setq-local dante-project-root
+            (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name))))))
+
+(defun dante-environment ()
+  "Guess the project environment."
+  (cond
+   ((file-exists-p (concat (dante-project-root) "stack.yaml")) 'stack)
+   ((file-exists-p (concat (dante-project-root) "shell.nix")) 'nix)
+   (t 'bare)))
+
+(defun dante-repl-command-line ()
+  "Return a suitable command line to run GHCi.
+Guessed if the variable dante-repl-command-line is nil."
+  (or dante-repl-command-line
+      (setq-local dante-repl-command-line
+            (cl-case (dante-environment)
+              (bare (list "cabal" "repl"))
+              (nix (list "nix-shell" "--run" "cabal repl"))
+              (stack '("stack" "repl"))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
 
 (defvar dante-mode-map (make-sparse-keymap)
   "Dante minor mode's map.")
 
+(defun dante-status ()
+  "Return dante's status for the current source buffer."
+  (if (eq (dante-state) 'ready)
+      (buffer-local-value 'dante-loaded-modules (dante-buffer-p))
+    (symbol-name (dante-state))))
+
 ;;;###autoload
 (define-minor-mode dante-mode
   "Minor mode for Dante.
 
+`dante-mode' takes one optional (prefix) argument.
+Interactively with no prefix argument, it toggles dante.
+A prefix argument enables dante if the argument is positive,
+and disables it otherwise.
+
+When called from Lisp, the `dante-mode' toggles dante if the
+argument is `toggle', disables dante if the argument is a
+non-positive integer, and enables dante otherwise (including
+if the argument is omitted or nil or a positive integer).
+
 \\{dante-mode-map}"
   :lighter (:eval (concat " Danté:" (dante-status)))
   :keymap dante-mode-map
+  :group dante
   (if dante-mode
       (progn (flycheck-select-checker 'haskell-dante))
       (progn (flycheck-select-checker 'haskell-ghc))))
@@ -114,20 +154,13 @@ Customize as a file or directory variable."
 (define-key dante-mode-map (kbd "C-c C-a") 'dante-auto-fix)
 (define-key dante-mode-map (kbd "C-c C-e") 'dante-eval-block)
 
-;;;###autoload
-(defun turn-on-dante-mode ()
-  "Turn on Dante in the current buffer."
-  (interactive)
-  (dante-mode 1))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Buffer-local variables/state
 
+(defvar-local dante-loaded-modules "" "Loaded modules as a string, reported by GHCi")
 (defvar-local dante-queue nil "List of ready GHCi queries.")
 (defvar-local dante-callback nil "Callback waiting for output.")
-(defvar-local dante-package-name nil
-  "The package name associated with the current buffer.")
-
+(defvar-local dante-package-name nil "The package name associated with the current buffer.")
 (defvar-local dante-state nil
   "nil: initial state
 - starting: GHCi starting
@@ -143,24 +176,8 @@ to destroy the buffer and create a fresh one without this variable enabled.")
       (buffer-local-value 'dante-state (dante-buffer-p))
     'stopped))
 
-(defun dante-status ()
-  "Return dante's status for the current source buffer."
-  (if (eq (dante-state) 'ready)
-      (buffer-local-value 'dante-loaded-modules (dante-buffer-p))
-    (symbol-name (dante-state))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Interactive commands
-
-(defvar-local dante-loaded-modules "")
-
-(defun dante-debug-info ()
-  "Show debug info."
-  (interactive)
-  (if (dante-buffer-p)
-      (with-current-buffer (dante-buffer-p)
-    (message " Callback: %s\nQueue: %s\n State: %s\n Loaded: %s\n" dante-callback dante-queue dante-state dante-loaded-modules))
-    (message "Dante not started (for this buffer)")))
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Interactive utils
 
 (defun dante-list-buffers ()
   "List hidden process buffers created by dante.
@@ -178,7 +195,6 @@ You can use this to kill them or look inside."
       (error "There are no Dante process buffers"))))
 
 (defvar haskell-mode-hook)
-
 (defun dante-fontify-expression (expression)
   "Return a haskell-fontified version of EXPRESSION."
   (with-temp-buffer
@@ -187,6 +203,9 @@ You can use this to kill them or look inside."
       (insert expression)
       (font-lock-ensure)
       (buffer-string))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Type and info at point
 
 (defun dante-type-at ()
   "Get the type of the thing or selection at point."
@@ -217,14 +236,8 @@ You can use this to kill them or look inside."
                (dante-fontify-expression info))
               (goto-char (point-min)))))))))
 
-(defun dante-restart ()
-  "Restart the process with the same configuration as before."
-  (interactive)
-  (when (dante-buffer-p) (dante-destroy))
-  (dante-start (lambda (_buffer done) (funcall done))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Flycheck integration
+;;;;;;;;;;;;;;;;;;;;;
+;; Flycheck checker
 
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 (defvar-local dante-loaded-interpreted nil)
@@ -341,7 +354,7 @@ CHECKER and BUFFER are added to each item parsed from STRING."
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Buffer operations
+;; Source buffer operations
 
 (defun dante-thing-at-point ()
   "Return (list START END) of something at the point."
@@ -441,8 +454,8 @@ x:\\foo\\bar (i.e., Windows)."
           path
         (concat (upcase (car drive-path)) ":\\" (cadr drive-path))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Query/commands
+;;;;;;;;;;;;;;;;;;;;
+;; GHCi formatting
 
 (defun dante--ghc-column-number-at-pos (pos)
   "Format the point POS as a column number as expected by GHCi."
@@ -460,7 +473,7 @@ x:\\foo\\bar (i.e., Windows)."
                       (buffer-substring-no-properties beg end)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Process communication
+;; GHCi process communication
 
 (defun dante-destroy ()
   "Stop GHCi and kill its associated process buffer."
@@ -480,6 +493,12 @@ x:\\foo\\bar (i.e., Windows)."
     (while (not result) (sleep-for 0.001))
     result))
 
+(defun dante-restart ()
+  "Restart the process with the same configuration as before."
+  (interactive)
+  (when (dante-buffer-p) (dante-destroy))
+  (dante-start (lambda (_buffer done) (funcall done))))
+
 (defun dante-start (cont) ;; TODO: rename to "dante-session"
   "Run the CONT in a valid GHCi session for the current (source) buffer.
 CONT is called as (CONT process-buffer done).  CONT must call done
@@ -492,23 +511,6 @@ when it is done."
     (if (get-buffer-process buffer)
         (dante-schedule-next buffer)
       (dante-start-process-in-buffer buffer source-buffer))))
-
-(defun dante-environment ()
-  "Guess the project environment."
-  (cond
-   ((file-exists-p (concat (dante-project-root) "stack.yaml")) 'stack)
-   ((file-exists-p (concat (dante-project-root) "shell.nix")) 'nix)
-   (t 'bare)))
-
-(defun dante-repl-command-line ()
-  "Return a suitable command line to run GHCi.
-Guessed if the variable dante-repl-command-line is nil."
-  (or dante-repl-command-line
-      (setq-local dante-repl-command-line
-            (cl-case (dante-environment)
-              (bare (list "cabal" "repl"))
-              (nix (list "nix-shell" "--run" "cabal repl"))
-              (stack '("stack" "repl"))))))
 
 (defun dante-start-process-in-buffer (buffer source-buffer)
   "Start a Dante worker in BUFFER for SOURCE-BUFFER."
@@ -552,8 +554,10 @@ Guessed if the variable dante-repl-command-line is nil."
   (goto-char (point-max))
   (when (search-backward "\n" nil t 2)
     (forward-char)
-    (message "GHCi: %s"
-             (buffer-substring-no-properties (point) (point-at-eol)))))
+    (let ((message
+          (cond ((search-forward-regexp "\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\)" nil t)
+                 (format "%s/%s(%s)" (match-string 1) (match-string 2) (match-string 3))))))
+    (when message (message "GHCi: %s" message)))))
 
 (defun dante-async-call (cmd callback)
   "Send GHCi the command string CMD.
@@ -578,6 +582,14 @@ This is a standard process sentinel function."
             (progn (with-current-buffer buffer (setq dante-state 'dead))
                    (dante-show-process-problem process change)))))))
 
+(defun dante-debug-info (buffer)
+  "Show debug info for dante buffer BUFFER."
+  (if buffer
+      (with-current-buffer buffer
+        (format "Directory:%s\n Command line:%s\n Loaded: %s\n State: %s\n Queue: %s\n Callback: %s\n"
+                default-directory (combine-and-quote-strings dante-repl-command-line) dante-loaded-modules dante-state dante-queue dante-callback))
+    (format "Dante not started in %s" buffer)))
+
 (defun dante-show-process-problem (process change)
   "Report to the user that PROCESS reported CHANGE, causing it to end."
   (message "Problem with GHCi process!")
@@ -592,14 +604,8 @@ but a problem occcured.
 
 EXTRA TROUBLESHOOTING INFO
 
-The GHCi process ended. Here is the reason that Emacs gives us:
-  " change "
-
-Here is the directory where GHCi was started:
-" default-directory "
-
-Here is the command line used to launch GHCi:
-" (combine-and-quote-strings dante-repl-command-line) "
+The GHCi process ended. Here is the reason that Emacs gives us: " change "
+" (dante-debug-info (current-buffer)) "
 
 WHAT TO DO NEXT
 
@@ -688,11 +694,6 @@ Uses the directory of the current buffer for context."
          (package-name (dante-package-name)))
     (concat " dante:" package-name " " root)))
 
-(defun dante-project-root ()
-  "Get the directory where the .cabal file is placed."
-  (or dante-project-root
-      (setq-local dante-project-root
-            (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name))))))
 
 (defun dante-package-name (&optional cabal-file)
   "Get the current package name from a nearby .cabal file.
