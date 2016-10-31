@@ -73,22 +73,23 @@ expands to: (fun1 arg1 (λ (x) (fun2 arg2 (λ (x y) body))))."
 
 (defcustom dante-debug nil
   "Show debug output."
-  :group 'dante)
+  :group 'dante
+  :type '(set (const inputs) (const outputs) (const responses) (const command-line)))
 
 (defcustom dante-repl-command-line nil
-  "Command line to start GHCi.
+  "Command line to start GHCi, as a list: the executable and its arguments.
 When nil, dante will guess the value depending on
 `dante-project-root' contents.  Customize as a file or directory
 variable."
   :group 'dante
-  :type '(list string))
+  :type '(repeat string))
 
 (defcustom dante-project-root nil
-  "The project root.
+  "The project root, as a string or nil.
 When nil, dante will guess the value by looking for a cabal file.
 Customize as a file or directory variable."
   :group 'dante
-  :type 'string)
+  :type '(choice (const nil) string))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
@@ -151,7 +152,6 @@ to destroy the buffer and create a fresh one without this variable enabled.")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive commands
 
-(setq dante-debug nil) ;; inputs, outputs, responses, command-line
 (defvar-local dante-loaded-modules "")
 
 (defun dante-debug-info ()
@@ -799,10 +799,10 @@ a list is returned instead of failing with a nil result."
 ;; Auto-fix
 
 (defcustom dante-suggestible-extensions
-  '("MultiParamTypeClasses" "RankNTypes" "DeriveGeneric" "DeriveFunctor" "DeriveFoldable"  "DeriveTraversable" "GADTs" "FlexibleContexts" "FlexibleInstances" "ViewPatterns" "RecordWildCards" "TypeOperators" "TypeFamilies" "FunctionalDependencies" "ScopedTypeVariables" "GeneralizedNewtypeDeriving")
+  '("DeriveFoldable" "DeriveFunctor" "DeriveGeneric" "DeriveTraversable" "FlexibleContexts" "FlexibleInstances" "FunctionalDependencies" "GADTs" "GeneralizedNewtypeDeriving" "MultiParamTypeClasses" "RankNTypes" "RecordWildCards" "ScopedTypeVariables" "TypeFamilies" "TypeOperators" "ViewPatterns")
   "Language extensions that Dante will use to fix errors."
   :group 'dante
-  :type '(list string))
+  :type '(repeat string))
 
 (defun dante-auto-fix (pos)
   "Attempt to fix the flycheck error at POS."
