@@ -17,7 +17,7 @@
 ;; URL: https://github.com/jyp/dante
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((flycheck "0.30") (emacs "25.1") (haskell-mode "13.0") (dash "2.13.0"))
+;; Package-Requires: ((flycheck "0.30") (emacs "25.1") (dash "2.13.0"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -196,13 +196,16 @@ You can use this to kill them or look inside."
 
 (defvar haskell-mode-hook)
 (defun dante-fontify-expression (expression)
-  "Return a haskell-fontified version of EXPRESSION."
-  (with-temp-buffer
-    (let ((haskell-mode-hook nil)) ;; to keep switching mode cheap
-      (when (fboundp 'haskell-mode) (haskell-mode))
-      (insert expression)
-      (font-lock-ensure)
-      (buffer-string))))
+  "Return a haskell-fontified version of EXPRESSION.
+If `haskell-mode' is loaded, just return EXPRESSION."
+  (if (fboundp 'haskell-mode)
+      (with-temp-buffer
+        (let ((haskell-mode-hook nil)) ;; to keep switching mode cheap
+          (haskell-mode)
+          (insert expression)
+          (font-lock-ensure)
+          (buffer-string)))
+    expression))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Type and info at point
