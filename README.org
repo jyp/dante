@@ -1,5 +1,8 @@
 * Dante: Emacs mode for Interactive Haskell
 
+  #+ATTR_HTML: title="Join the chat at https://gitter.im/dante-mode/Lobby"
+  [[https://gitter.im/dante-mode/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge][file:https://badges.gitter.im/dante-mode/Lobby.svg]]
+
 [[http://stable.melpa.org/packages/dante-badge.svg]]
 
 Dante is a fork of Intero mode. It steals many good ideas from Intero,
