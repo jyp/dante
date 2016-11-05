@@ -1,6 +1,8 @@
 * Dante: Emacs mode for Interactive Haskell
 
-[[http://stable.melpa.org/packages/dante-badge.svg]]
+[[https://gitter.im/dante-mode/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge][https://badges.gitter.im/dante-mode/Lobby.svg]]
+[[https://melpa.org/#/dante][https://melpa.org/packages/dante-badge.svg]]
+[[https://stable.melpa.org/#/dante][https://stable.melpa.org/packages/dante-badge.svg]]
 
 Dante is a fork of Intero mode. It steals many good ideas from Intero,
 it aims for light weightedness. Dante has no dependency on "Stack" nor
