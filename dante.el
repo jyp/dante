@@ -823,7 +823,7 @@ a list is returned instead of failing with a nil result."
               ;; ^^ delete-region may garble the matches
               (delete-region (match-beginning 0) (point))
               (insert replacement)))
-           ((string-match "Perhaps you meant ‘\\([‘]*\\)’" msg)
+           ((string-match "Perhaps you meant ‘\\([^‘]*\\)’" msg)
             (let ((replacement (match-string 1 msg)))
               ;; ^^ delete-region may garble the matches
               (apply #'delete-region (dante-ident-pos-at-point))
