@@ -492,9 +492,10 @@ x:\\foo\\bar (i.e., Windows)."
 (defun blocking-call (cont)
   "Call CONT as (CONT K) and block until (K res) is called, then return res."
   (let ((result nil))
-    (funcall cont (lambda (reply) (setq result reply)))
+    (funcall cont (lambda (reply) (setq result (list reply))))
+    ;; use a list so that even 'nil' will be detected as a result.
     (while (not result) (sleep-for 0.001))
-    result))
+    (car result)))
 
 (defun dante-restart ()
   "Restart the process with the same configuration as before."
