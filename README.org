@@ -5,23 +5,30 @@
 [[https://stable.melpa.org/#/dante][https://stable.melpa.org/packages/dante-badge.svg]]
 
 Dante is a fork of Intero mode. It steals many good ideas from Intero,
-it aims for light weightedness. Dante has no dependency on "Stack" nor
-on any custom Haskell code. Dante's Emacs code is about half as long
-as that of Intero. Flychecking is optional (yet recommended).
+but it aims for light weightedness. Dante has no dependency on "Stack"
+nor on any custom Haskell code. Dante's Emacs code is about half as
+long as that of Intero. Flychecking is optional (yet recommended).
 
 ** Features
 
-| Feature                                 | How to use                   |
-|-----------------------------------------+------------------------------|
-| Flycheck type checking                  | enable flycheck-mode         |
-| Type of selection                       | C-c C-t                      |
-| Info at point                           | C-c C-i                      |
-| Apply Ghc suggestion for error at point | C-c C-a                      |
-| Goto definition                         | (xref-find-definitions)      |
-| Find uses                               | (xref-find-references)       |
-| REPLoid (*)                             | C-c C-e at {-> expression -} |
+| Feature                                 | Command               | Keybinding |
+|-----------------------------------------+-----------------------+------------|
+| Flycheck type checking                  | flycheck-mode         |            |
+| Type of selection                       | dante-type-at         | C-c .      |
+| Info at point                           | dante-info            | C-c ,      |
+| Apply Ghc suggestion for error at point | dante-auto-fix        | C-c /      |
+| Goto definition                         | xref-find-definitions | M-.        |
+| Find uses                               | xref-find-references  | M-?        |
+| REPLoid (*)                             | dante-eval-block      | C-c '      |
+| Restart                                 | dante-restart         |            |
 
-(*) REPLoid explanation: 
+
+(*) REPLoid explanation:
+
+You can evaluate code by writing it in a comment of the form 
+~{-> [code to evaluate] -}~ and run dante-eval-block.
+
+Example:
 
 #+BEGIN_SRC Haskell
 example :: [String]

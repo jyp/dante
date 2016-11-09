@@ -1,10 +1,5 @@
 ;;; dante.el --- Development mode for Haskell -*- lexical-binding: t -*-
 
-;; DANTE: Do Not Aim To Expand.
-
-;; This is a mode for GHCi advanced "IDE" features. The mode depends
-;; on GHCi only, keeping the logic simple. Additionally it aims to be
-;; minimal as far as possible.
 
 ;; Copyright (c) 2016 Jean-Philippe Bernardy
 ;; Copyright (c) 2016 Chris Done
@@ -35,6 +30,12 @@
 ;; Boston, MA 02110-1301, USA.
 
 ;;; Commentary:
+
+;; DANTE: Do Not Aim To Expand.
+
+;; This is a mode for GHCi advanced "IDE" features. The mode depends
+;; on GHCi only, keeping the logic simple. Additionally it aims to be
+;; minimal as far as possible.
 
 ;;; Code:
 
@@ -146,13 +147,12 @@ if the argument is omitted or nil or a positive integer).
   :group dante
   (if dante-mode
       (progn (flycheck-select-checker 'haskell-dante))
-      (progn (flycheck-select-checker 'haskell-ghc))))
+      (progn (flycheck-select-checker nil))))
 
-(define-key dante-mode-map (kbd "C-c C-x C-r") 'dante-restart)
-(define-key dante-mode-map (kbd "C-c C-t") 'dante-type-at)
-(define-key dante-mode-map (kbd "C-c C-i") 'dante-info)
-(define-key dante-mode-map (kbd "C-c C-a") 'dante-auto-fix)
-(define-key dante-mode-map (kbd "C-c C-e") 'dante-eval-block)
+(define-key dante-mode-map (kbd "C-c .") 'dante-type-at)
+(define-key dante-mode-map (kbd "C-c ,") 'dante-info)
+(define-key dante-mode-map (kbd "C-c /") 'dante-auto-fix)
+(define-key dante-mode-map (kbd "C-c '") 'dante-eval-block)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Buffer-local variables/state
