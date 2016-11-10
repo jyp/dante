@@ -38,8 +38,8 @@ example = ["This is an example", "of", "interactive", "evaluation"]
 
 -}
 #+END_SRC
-In the above file, if you type ~C-c C-e~ on the line containing
-"intercalate", you'll get:
+In the above file, if you invoke ~dante-eval-block~ on the line
+containing "intercalate", you'll get:
 
 #+BEGIN_SRC haskell
 {-> intercalate " " example
@@ -66,4 +66,4 @@ that Dante keybindings are not hidden.
 
 ** Customization
 
-M-x customize-group dante
+Use M-x customize-group dante
