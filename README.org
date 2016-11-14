@@ -5,23 +5,29 @@
 [[https://stable.melpa.org/#/dante][https://stable.melpa.org/packages/dante-badge.svg]]
 
 Dante is a fork of Intero mode. It steals many good ideas from Intero,
-it aims for light weightedness. Dante has no dependency on "Stack" nor
-on any custom Haskell code. Dante's Emacs code is about half as long
-as that of Intero. Flychecking is optional (yet recommended).
+but it aims for light weightedness (see below for a detailed
+comparison).
 
 ** Features
 
-| Feature                                 | How to use                   |
-|-----------------------------------------+------------------------------|
-| Flycheck type checking                  | enable flycheck-mode         |
-| Type of selection                       | C-c C-t                      |
-| Info at point                           | C-c C-i                      |
-| Apply Ghc suggestion for error at point | C-c C-a                      |
-| Goto definition                         | (xref-find-definitions)      |
-| Find uses                               | (xref-find-references)       |
-| REPLoid (*)                             | C-c C-e at {-> expression -} |
+| Feature                                 | Command               | Keybinding |
+|-----------------------------------------+-----------------------+------------|
+| Flycheck type checking                  | flycheck-mode         |            |
+| Type of selection                       | dante-type-at         | C-c .      |
+| Info at point                           | dante-info            | C-c ,      |
+| Apply Ghc suggestion for error at point | dante-auto-fix        | C-c /      |
+| Goto definition                         | xref-find-definitions | M-.        |
+| Find uses                               | xref-find-references  | M-?        |
+| REPLoid (*)                             | dante-eval-block      | C-c '      |
+| Restart                                 | dante-restart         |            |
 
-(*) REPLoid explanation: 
+
+(*) REPLoid explanation:
+
+You can evaluate code by writing it in a comment of the form 
+~{-> [code to evaluate] -}~ and run dante-eval-block.
+
+Example:
 
 #+BEGIN_SRC Haskell
 example :: [String]
@@ -31,8 +37,8 @@ example = ["This is an example", "of", "interactive", "evaluation"]
 
 -}
 #+END_SRC
-In the above file, if you type ~C-c C-e~ on the line containing
-"intercalate", you'll get:
+In the above file, if you invoke ~dante-eval-block~ on the line
+containing "intercalate", you'll get:
 
 #+BEGIN_SRC haskell
 {-> intercalate " " example
@@ -59,4 +65,17 @@ that Dante keybindings are not hidden.
 
 ** Customization
 
-M-x customize-group dante
+Use M-x customize-group dante
+** Comparison with Intero
+
+To the best of my knowledge, here is how Dante compares with Intero:
+
+- Dante has no dependency on "Stack"
+- Dante's Emacs code is about half as long as that of Intero.
+- Dante does not depend on custom Haskell code, contrary to intero. Thus,
+  it will if (and only if) GHCi works for your project. (Including via "Stack").
+- Dante supports  ~xref-find-definitions~ and ~xref-find-references~.
+- With Dante, Flychecking is optional (yet recommended), whereas
+  Intero demands that you flycheck your code.
+- Dante has has a different approach to Haskell evaluation
+- Dante offers no support for Hoogle nor eldoc.
