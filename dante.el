@@ -79,9 +79,8 @@ expands to: (fun1 arg1 (λ (x) (fun2 arg2 (λ (x y) body))))."
 
 (defcustom dante-repl-command-line nil
   "Command line to start GHCi, as a list: the executable and its arguments.
-When nil, dante will guess the value depending on
-`dante-project-root' contents.  Customize as a file or directory
-variable."
+When nil, dante will guess the value depending on `dante-project-root' contents.
+Customize as a file or directory variable."
   :group 'dante
   :type '(repeat string))
 
@@ -164,7 +163,8 @@ if the argument is omitted or nil or a positive integer).
 (defvar-local dante-state nil
   "nil: initial state
 - starting: GHCi starting
-- running: GHCi running
+- ready: GHCi ready to accept requests
+- busy: GHCi currently processing a request
 - deleting: The process of the buffer is being deleted.
 - dead: GHCi died on its own. Do not try restarting
 automatically. The user will have to manually run `dante-restart'
@@ -172,9 +172,9 @@ to destroy the buffer and create a fresh one without this variable enabled.")
 
 (defun dante-state ()
   "Return dante-state for the current source buffer."
-  (if (dante-buffer-p)
-      (buffer-local-value 'dante-state (dante-buffer-p))
-    'stopped))
+  (let ((bp (dante-buffer-p)))
+    (when bp
+      (buffer-local-value 'dante-state bp))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive utils
@@ -586,8 +586,10 @@ This is a standard process sentinel function."
       (let ((buffer (process-buffer process)))
         (if (eq (buffer-local-value 'dante-state buffer) 'deleting)
             (message "GHCi process deleted.")
-            (progn (with-current-buffer buffer (setq dante-state 'dead))
-                   (dante-show-process-problem process change)))))))
+          (progn
+            (with-current-buffer buffer
+              (setq dante-state 'dead))
+            (dante-show-process-problem process change)))))))
 
 (defun dante-debug-info (buffer)
   "Show debug info for dante buffer BUFFER."
