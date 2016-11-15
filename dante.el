@@ -690,7 +690,7 @@ Uses the directory of the current buffer for context."
          (buffer-name (dante-buffer-name))
          (default-directory (if cabal-file
                                 (file-name-directory cabal-file)
-                              root)))
+                              (or root default-directory))))
     (with-current-buffer
         (get-buffer-create buffer-name)
       (setq dante-package-name package-name)
