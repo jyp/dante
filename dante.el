@@ -313,7 +313,7 @@ CHECKER and BUFFER are added to each item parsed from STRING."
                                        :filename (dante-buffer-file-name buffer))
                 messages))
         (forward-line -1))
-      (delete-dups messages))))
+      messages)))
 
 (defconst dante-error-regexp-alist
   `((,(concat
