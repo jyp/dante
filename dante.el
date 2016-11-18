@@ -818,6 +818,9 @@ a list is returned instead of failing with a nil result."
       (let ((msg (car messages)))
         (save-excursion
           (cond
+           ((string-match "A do-notation statement discarded a result of type" msg)
+            (goto-char (car (dante-ident-pos-at-point)))
+            (insert "_ <- "))
            ((string-match "Failed to load interface for ‘\\(.*\\)’\n[ ]*Perhaps you meant \\([^ ]*\\)" msg)
             (let ((replacement (match-string 2 msg)))
               (search-forward (match-string 1 msg))
