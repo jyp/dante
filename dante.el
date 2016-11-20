@@ -804,7 +804,7 @@ a list is returned instead of failing with a nil result."
 ;; Auto-fix
 
 (defcustom dante-suggestible-extensions
-  '("DeriveFoldable" "DeriveFunctor" "DeriveGeneric" "DeriveTraversable" "FlexibleContexts" "FlexibleInstances" "FunctionalDependencies" "GADTs" "GeneralizedNewtypeDeriving" "MultiParamTypeClasses" "RankNTypes" "RecordWildCards" "ScopedTypeVariables" "TypeFamilies" "TypeOperators" "TypeSynonymInstances" "ViewPatterns")
+  '("DeriveFoldable" "DeriveFunctor" "DeriveGeneric" "DeriveTraversable" "FlexibleContexts" "FlexibleInstances" "FunctionalDependencies" "GADTs" "GeneralizedNewtypeDeriving" "KindSignatures" "MultiParamTypeClasses" "RankNTypes" "RecordWildCards" "ScopedTypeVariables" "TypeFamilies" "TypeOperators" "TypeSynonymInstances" "ViewPatterns")
   "Language extensions that Dante will use to fix errors."
   :group 'dante
   :type '(repeat string))
