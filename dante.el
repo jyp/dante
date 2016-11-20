@@ -282,38 +282,35 @@ process."
 (defun dante-parse-errors-warnings-splices (checker buffer string)
   "Parse flycheck errors and warnings.
 CHECKER and BUFFER are added to each item parsed from STRING."
-  (with-temp-buffer
-    (insert string)
-    (goto-char (point-min))
-    (let ((messages (list))
-          (temp-file (dante-temp-file-name buffer)))
-      (while (search-forward-regexp
-              (concat "[\r\n]\\([A-Z]?:?[^ \r\n:][^:\n\r]+\\):\\([0-9()-:]+\\):"
-                      "[ \n\r]+\\([[:unibyte:][:nonascii:]]+?\\)\n[^ ]")
-              nil t 1)
-        (let* ((file (dante-canonicalize-path (match-string 1)))
-               (location-raw (match-string 2))
-               (msg (match-string 3)) ;; Replace gross bullet points.
-               (type (cond ((string-match "^Warning:" msg)
-                            (setq msg (replace-regexp-in-string "^Warning: *" "" msg))
-                            (if (string-match "^\\[-Wdeferred-type-errors\\]" msg)
-                                'error
-                              'warning))
-                           ((string-match "^Splicing " msg) 'splice)
-                           (t                               'error)))
-               (location (dante-parse-error
-                          (concat file ":" location-raw ": x")))
-               (line (plist-get location :line))
-               (column (plist-get location :col)))
-          (push (flycheck-error-new-at line column type
-                                       msg
-                                       :checker checker
-                                       :buffer (when (string= temp-file file) buffer)
-                                       ;; TODO: report external errors somehow.
-                                       :filename (dante-buffer-file-name buffer))
-                messages))
-        (forward-line -1))
-      messages)))
+  (let ((messages (list))
+        (temp-file (dante-temp-file-name buffer)))
+    (while (string-match
+            (concat "[\n]\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\):"
+                    "[ \n]+\\([[:unibyte:][:nonascii:]]+?\\)\n[^ ]")
+            string)
+      (let* ((file (dante-canonicalize-path (match-string 1 string)))
+             (location-raw (match-string 2 string))
+             (msg (match-string 3 string)) ;; Replace gross bullet points.
+             (s (substring string (1+ (match-end 0))))
+             (type (cond ((string-match "^Warning:" msg)
+                          (setq msg (replace-regexp-in-string "^Warning: *" "" msg))
+                          (if (string-match "^\\[-Wdeferred-type-errors\\]" msg)
+                              'error
+                            'warning))
+                         ((string-match "^Splicing " msg) 'splice)
+                         (t                               'error)))
+             (location (dante-parse-error
+                        (concat file ":" location-raw ": x")))
+             (line (plist-get location :line))
+             (column (plist-get location :col)))
+        (setq string s)
+        (push (flycheck-error-new-at line column type msg
+                                     :checker checker
+                                     :buffer (when (string= temp-file file) buffer)
+                                     ;; TODO: report external errors somehow.
+                                     :filename (dante-buffer-file-name buffer))
+              messages)))
+    messages))
 
 (defconst dante-error-regexp-alist
   `((,(concat
@@ -639,8 +636,7 @@ Text is ACC umulated.  CONT is call with all concatenated S-IN."
         (progn
           (setq dante-loaded-modules (match-string 1 s))
           (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
-            (when (memq 'responses dante-debug)
-              (message "GHCi <= %s\n     => %s" cmd string))
+            (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
             (with-current-buffer source-buf (funcall cont acc))))
       (dante-async (apply-partially #'dante-wait-for-prompt source-buf cmd s cont)))))
 
