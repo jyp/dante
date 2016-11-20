@@ -33,8 +33,8 @@
 
 ;; DANTE: Do Not Aim To Expand.
 
-;; This is a mode for GHCi advanced "IDE" features. The mode depends
-;; on GHCi only, keeping the logic simple. Additionally it aims to be
+;; This is a mode for GHCi advanced "IDE" features.  The mode depends
+;; on GHCi only, keeping the logic simple.  Additionally it aims to be
 ;; minimal as far as possible.
 
 ;;; Code:
@@ -533,12 +533,13 @@ when it is done."
         (setq-local dante-repl-command-line args))
       (with-current-buffer source-buffer
         (set-dante-state 'starting)
-        (dante-async-call
-         (concat ":set -Wall\n" ;; TODO: configure
-                 ":set +c\n" ;; collect type info
-                 ":set prompt \"\\4%s|\"")
-         (lambda (_start-messages) (message "GHCi started!")
-           (dante-schedule-next buffer))))
+        (dante-cps-let
+            ((_start-messages (dante-async-call
+                               (concat ":set -Wall\n" ;; TODO: configure
+                                       ":set +c\n" ;; collect type info
+                                       ":set prompt \"\\4%s|\""))))
+          (message "GHCi started!")
+          (dante-schedule-next buffer)))
       (set-process-filter
        process
        (lambda (process string)
@@ -563,17 +564,22 @@ when it is done."
                  (format "%s/%s(%s)" (match-string 1) (match-string 2) (match-string 3))))))
     (when message (message "GHCi: %s" message)))))
 
-(defun dante-async-call (cmd callback)
+(defun dante-async (cont)
+  "Install CONT as a callback for GHCi output.
+Called in process buffer."
+    (when dante-callback
+      (error "Try to set a callback (%s)\n... but one exists already! (%s)" cont dante-callback))
+    (setq dante-callback cont))
+
+(defun dante-async-call (cmd cont)
   "Send GHCi the command string CMD.
-The result is passed to CALLBACK as (CALLBACK REPLY).  Can only be
-called from a valid session."
-  (let ((source-buffer (current-buffer))
-        (buffer (dante-buffer-p)))
-    (with-current-buffer buffer
-      (when dante-callback (error "Try to set a callback (%s ~> %s)\n... but one exists already! (%s)" cmd callback dante-callback))
-      (when (memq 'outputs dante-debug) (message "[Dante%s] -> %s" buffer cmd))
-      (setq dante-callback (list :cmd cmd :func callback :source-buffer source-buffer))
-      (process-send-string (get-buffer-process buffer) (concat cmd "\n")))))
+The result is passed to CONT as (CONT REPLY).  Can only be called
+from a valid session."
+  (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
+  (let ((source-buffer (current-buffer)))
+  (with-current-buffer (dante-buffer-p)
+    (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n"))
+    (dante-async (apply-partially #'dante-wait-for-prompt source-buffer cmd "" cont)))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -625,25 +631,28 @@ You can always run M-x dante-restart to make it try again.
 ")
     'face 'compilation-error)))
 
+(defun dante-wait-for-prompt (source-buf cmd acc cont s-in)
+  "Loop waiting for a GHCi prompt for SOURCE-BUF after CMD.
+Text is ACC umulated.  CONT is call with all concatenated S-IN."
+  (let ((s (concat acc s-in)))
+    (if (string-match "\4\\(.*\\)|" s)
+        (progn
+          (setq dante-loaded-modules (match-string 1 s))
+          (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
+            (when (memq 'responses dante-debug)
+              (message "GHCi <= %s\n     => %s" cmd string))
+            (with-current-buffer source-buf (funcall cont acc))))
+      (dante-async (apply-partially #'dante-wait-for-prompt source-buf cmd s cont)))))
+
 
 (defun dante-read-buffer ()
-  "In the process buffer, we read what's in it."
-  (goto-char 1)
-  (when (search-forward-regexp "\4\\(.*\\)|" nil t 1)
-    (setq dante-loaded-modules (match-string 1))
-    (let ((callback dante-callback)
-          (string (dante--kill-last-newline
-                   (dante--strip-carriage-returns (buffer-substring 1 (1- (match-beginning 1)))))))
-        (delete-region 1 (point))
-        (if callback
-            (progn (when (memq 'responses dante-debug)
-                     (message (concat "GHCi <= %s\n"
-                                      "     => %s")
-                                      (plist-get callback :cmd) string))
-                   (setq dante-callback nil)
-                   (with-current-buffer (plist-get callback :source-buffer)
-                     (funcall (plist-get callback :func) string)))
-          (error "Received output in %s (%s) but no callback" (current-buffer) string)))))
+  "Process GHCi output."
+  (let ((callback dante-callback)
+        (string (dante--strip-carriage-returns (buffer-string))))
+    (unless dante-callback (error "Received output in %s (%s) but no callback" (current-buffer) string))
+    (delete-region 1 (point-max))
+    (setq dante-callback nil)
+    (funcall callback string)))
 
 (defun dante-schedule-next (buffer)
   "Run the next GHCi sub-session for BUFFER, if any."
