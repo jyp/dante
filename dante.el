@@ -862,10 +862,9 @@ a list is returned instead of failing with a nil result."
     (if (not (looking-at "{-> "))
         (message "Not in an evaluable block. (Expecting the line to start with '{->')")
       (let* ((beg (+ 4 (point)))
-             (end (if (search-forward "-}" (line-end-position) t)
-                      (- (point) 2)
-                    (line-end-position))))
-        ;; TODO: save a mark
+             (end (copy-marker (if (search-forward "-}" (line-end-position) t)
+                                   (- (point) 2)
+                                 (line-end-position)))))
         (dante-cps-let ((_load-messages (dante-async-load-current-buffer t))
                   (res (dante-async-call (buffer-substring-no-properties beg end))))
              (goto-char end)
