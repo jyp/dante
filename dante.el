@@ -637,7 +637,7 @@ Text is ACC umulated.  CONT is call with all concatenated S-IN."
           (setq dante-loaded-modules (match-string 1 s))
           (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
             (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
-            (with-current-buffer source-buf (funcall cont acc))))
+            (with-current-buffer source-buf (funcall cont string))))
       (dante-async (apply-partially #'dante-wait-for-prompt source-buf cmd s cont)))))
 
 
