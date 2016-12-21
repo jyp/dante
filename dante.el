@@ -101,6 +101,7 @@ Customize as a file or directory variable."
 (defun dante-environment ()
   "Guess the project environment."
   (cond
+   ((file-exists-p (concat (dante-project-root) "styx.yaml")) 'styx)
    ((file-exists-p (concat (dante-project-root) "shell.nix")) 'nix)
    ((file-exists-p (concat (dante-project-root) "stack.yaml")) 'stack)
    (t 'bare)))
@@ -112,6 +113,7 @@ Guessed if the variable dante-repl-command-line is nil."
       (setq-local dante-repl-command-line
             (cl-case (dante-environment)
               (bare (list "cabal" "repl"))
+              (styx (list "styx" "repl"))
               (nix (list "nix-shell" "--run" "cabal repl"))
               (stack '("stack" "repl"))))))
 
