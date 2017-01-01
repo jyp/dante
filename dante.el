@@ -84,12 +84,6 @@ Customize as a file or directory variable."
   :group 'dante
   :type '(repeat string))
 
-(defcustom dante-unpreferred-launchers nil
-  "When guessing a project type, try \"cabal repl\" before listed launchers.
-They will be tried (if applicable) if GHCi doesn't start."
-  :group 'dante
-  :type '(set (const stack) (const nix)))
-
 (defcustom dante-project-root nil
   "The project root, as a string or nil.
 When nil, dante will guess the value by looking for a cabal file.
@@ -105,50 +99,35 @@ look for a .cabal file, or use the current dir)."
       (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name)))))
 
 (defun dante-repl-by-file (root file cmdline)
-  (when (file-exists-p (concat root file))
-    cmdline))
+  (when (file-exists-p (concat root file)) cmdline))
 
-(defconst dante-repl-command-line-methods
-  `((bare  . ,(lambda (_) '("cabal" "repl")))
-    (stack . ,(lambda (root)
-                (dante-repl-by-file root "stack.yaml" '("stack" "repl"))))
-    (styx  . ,(lambda (root) (dante-repl-by-file root "styx.yaml" '("styx repl"))))
-    (nix   . ,(lambda (root)
-                (dante-repl-by-file root "shell.nix"
-                                    '("nix-shell" "--run" "cabal repl")))))
+(defconst dante-repl-command-line-default-methods
+  `((styx  . ,(lambda (root) (dante-repl-by-file root "styx.yaml" '("styx" "repl"))))
+    (nix   . ,(lambda (root) (dante-repl-by-file root "shell.nix" '("nix-shell" "--run" "cabal repl"))))
+    (stack . ,(lambda (root) (dante-repl-by-file root "stack.yaml" '("stack" "repl"))))
+    (bare  . ,(lambda (_) '("cabal" "repl"))))
   "Default GHCi launch command lines.")
 
-(defun dante-possible-environments ()
-  "Guess the usable project environments."
-  (let ((root (dante-project-root))
-        envs)
-    (mapc (lambda (x)
-            (let* ((sym (car x))
-                   (f (cdr x))
-                   (r (funcall f root)))
-              (when r (push `(,sym . ,r) envs))))
-          dante-repl-command-line-methods)
-    envs))
+(defcustom dante-repl-command-line-methods-alist dante-repl-command-line-default-methods
+  "GHCi launch command lines. This is an alist from method name
+  to a function taking the root directory and returning either a
+  command line or nil if the method should not apply. The first
+  non-nil result will be used as a command line. Customize this
+  if you do not want certain methods to be used by default by
+  dante. If you want a specific configuration for your project,
+  customize `dante-repl-command-line' directly, f as a
+  directory-local variable."
+  :type '(alist :key-type symbol :value-type function))
+;; (setq dante-repl-command-line-methods-alist dante-repl-command-line-default-methods)
 
-(defun dante-repl-command-lines (&optional ignore-envs)
-  "Returns a list of potential command lines for running GHCi.
-If `dante-repl-command-line' is non-nil, it will be returned as the only item.
-Otherwise, use `dante-possible-environments' to guess how to run GHCi.
-IGNORE-ENVS takes the same values as `dante-unpreferred-launchers'."
-  (if dante-repl-command-line
-      (list dante-repl-command-line)
-    (let* (secondary
-           (r (cl-reduce (lambda (x acc)
-                           (let ((cmd (cdr x)))
-                             (if (memq (car x) ignore-envs)
-                                 (progn
-                                   (push cmd secondary)
-                                   acc)
-                               (cons cmd acc))))
-                         (dante-possible-environments)
-                         :from-end t :initial-value nil)))
-      (append r secondary))))
-
+(defun dante-repl-command-line ()
+  "Return the command line for running GHCi.
+If `dante-repl-command-line' is non-nil, it will be returned.
+Otherwise, use `dante-repl-command-line-methods-alist'."
+  (or dante-repl-command-line
+      (let ((root (dante-project-root)))
+            (--first it (--map (funcall (cdr it) (dante-project-root))
+                               dante-repl-command-line-methods-alist)))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
 
@@ -556,31 +535,21 @@ when it is done."
         (dante-schedule-next buffer)
       (dante-start-process-in-buffer buffer source-buffer))))
 
-(defun dante-try-environment (buffer args)
-  "Try to start a Dante worker."
-  (with-current-buffer buffer
-    (when (memq 'command-line dante-debug)
-      (message "GHCi command line: %s"
-               (combine-and-quote-strings args)))
-    (message "Dante: Starting GHCi ...")
-    (condition-case err
-        (apply #'start-process "dante" buffer args)
-      (file-error err))))
-
 (defun dante-start-process-in-buffer (buffer source-buffer)
   "Start a Dante worker in BUFFER for SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
-    (let* ((process (cl-loop for args in (dante-repl-command-lines
-                                          dante-unpreferred-launchers)
-                             for p = (dante-try-environment buffer args)
-                             when (processp p) return p
-                             finally do (signal (car p) (cdr p)))))
+    (let* ((args (dante-repl-command-line))
+           (process (with-current-buffer buffer
+                      (when (memq 'command-line dante-debug)
+                        (message "GHCi command line: %s" (combine-and-quote-strings args)))
+                      (message "Dante: Starting GHCi ...")
+                      (apply #'start-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (with-current-buffer buffer
         (erase-buffer)
         (setq dante-callback nil) ;; todo: necessary?
-        (setq-local dante-repl-command-line (process-command process)))
+        (setq-local dante-command-line (process-command process)))
       (with-current-buffer source-buffer
         (set-dante-state 'starting)
         (dante-cps-let
@@ -649,7 +618,7 @@ This is a standard process sentinel function."
   (if buffer
       (with-current-buffer buffer
         (format "Directory:%s\n Command line:%s\n Loaded: %s\n State: %s\n Queue: %s\n Callback: %s\n"
-                default-directory (combine-and-quote-strings dante-repl-command-line) dante-loaded-modules dante-state dante-queue dante-callback))
+                default-directory dante-command-line dante-loaded-modules dante-state dante-queue dante-callback))
     (format "Dante not started in %s" buffer)))
 
 (defun dante-show-process-problem (process change)
