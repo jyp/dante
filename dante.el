@@ -91,6 +91,12 @@ Customize as a file or directory variable."
   :group 'dante
   :type '(choice (const nil) string))
 
+(defcustom dante-target nil
+  "The target to demand from cabal repl, as a string or nil.
+Customize as a file or directory variable."
+  :group 'dante
+  :type '(choice (const nil) string))
+
 (defun dante-project-root ()
   "Get the root directory for the project (if
 `dante-project-root' is set as a variable, return that, otherwise
@@ -539,7 +545,7 @@ when it is done."
   "Start a Dante worker in BUFFER for SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
-    (let* ((args (dante-repl-command-line))
+    (let* ((args (append (dante-repl-command-line) (list (or dante-target ""))))
            (process (with-current-buffer buffer
                       (when (memq 'command-line dante-debug)
                         (message "GHCi command line: %s" (combine-and-quote-strings args)))
@@ -721,8 +727,7 @@ Uses the directory of the current buffer for context."
   "Create a dante process buffer name."
   (let* ((root (dante-project-root))
          (package-name (dante-package-name)))
-    (concat " dante:" package-name " " root)))
-
+    (concat " dante:" package-name ":" dante-target " " root)))
 
 (defun dante-package-name (&optional cabal-file)
   "Get the current package name from a nearby .cabal file.
