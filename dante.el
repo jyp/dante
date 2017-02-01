@@ -701,14 +701,11 @@ Uses the directory of the current buffer for context."
          (package-name (if cabal-file
                            (dante-package-name cabal-file)
                          ""))
-         (buffer-name (dante-buffer-name))
-         (default-directory (if cabal-file
-                                (file-name-directory cabal-file)
-                              (or root default-directory))))
+         (buffer-name (dante-buffer-name)))
     (with-current-buffer (get-buffer-create buffer-name)
       (setq dante-package-name package-name)
       (fundamental-mode)
-      (cd default-directory)
+      (cd root)
       (current-buffer))))
 
 (defun set-dante-state (state)
