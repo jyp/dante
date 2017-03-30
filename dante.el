@@ -104,13 +104,14 @@ look for a .cabal file, or use the current dir)."
   (or dante-project-root
       (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name)))))
 
-(defun dante-repl-by-file (root file cmdline)
-  (when (file-exists-p (concat root file)) cmdline))
+(defun dante-repl-by-file (root files cmdline)
+  (some (lambda (file) (when (file-exists-p (concat root file)) cmdline)) files))
 
 (defconst dante-repl-command-line-default-methods
-  `((styx  . ,(lambda (root) (dante-repl-by-file root "styx.yaml" '("styx" "repl"))))
-    (nix   . ,(lambda (root) (dante-repl-by-file root "shell.nix" '("nix-shell" "--run" "cabal repl"))))
-    (stack . ,(lambda (root) (dante-repl-by-file root "stack.yaml" '("stack" "repl"))))
+  `((styx  . ,(lambda (root) (dante-repl-by-file root '("styx.yaml") '("styx" "repl"))))
+    (nix   . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
+                                                      '("nix-shell" "--run" "cabal repl"))))
+    (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl"))))
     (bare  . ,(lambda (_) '("cabal" "repl"))))
   "Default GHCi launch command lines.")
 
@@ -230,13 +231,15 @@ If `haskell-mode' is loaded, just return EXPRESSION."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Type and info at point
 
-(defun dante-type-at ()
+(defun dante-type-at (insert)
   "Get the type of the thing or selection at point."
-  (interactive)
+  (interactive "P")
   (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
     (dante-cps-let ((_load-messages (dante-async-load-current-buffer nil))
               (ty (dante-async-call (concat ":type-at " tap))))
-      (message "%s" (dante-fontify-expression ty)))))
+      (if insert (save-excursion (goto-char (line-beginning-position))
+                                 (insert (dante-fontify-expression ty) "\n"))
+                 (message "%s" (dante-fontify-expression ty))))))
 
 (defun dante-info (ident)
   "Get the info about the IDENT at point."
