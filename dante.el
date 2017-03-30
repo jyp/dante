@@ -171,7 +171,7 @@ if the argument is omitted or nil or a positive integer).
 (define-key dante-mode-map (kbd "C-c .") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c ,") 'dante-info)
 (define-key dante-mode-map (kbd "C-c /") 'dante-auto-fix)
-(define-key dante-mode-map (kbd "C-c '") 'dante-eval-block)
+(define-key dante-mode-map (kbd "C-c \"") 'dante-eval-block)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Buffer-local variables/state
