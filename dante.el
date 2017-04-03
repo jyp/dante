@@ -112,7 +112,7 @@ look for a .cabal file, or use the current dir)."
     (nix   . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
                                                       '("nix-shell" "--run" "cabal repl"))))
     (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl"))))
-    (mafia . ,(lambda (root) (dante-repl-by-file root "mafia" '("mafia" "repl"))))
+    (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl"))))
     (bare  . ,(lambda (_) '("cabal" "repl"))))
   "Default GHCi launch command lines.")
 
