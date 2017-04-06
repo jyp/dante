@@ -105,7 +105,7 @@ look for a .cabal file, or use the current dir)."
       (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name)))))
 
 (defun dante-repl-by-file (root files cmdline)
-  (some (lambda (file) (when (file-exists-p (concat root file)) cmdline)) files))
+  (cl-some (lambda (file) (when (file-exists-p (concat root file)) cmdline)) files))
 
 (defconst dante-repl-command-line-default-methods
   `((styx  . ,(lambda (root) (dante-repl-by-file root '("styx.yaml") '("styx" "repl"))))
