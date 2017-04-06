@@ -857,6 +857,13 @@ a list is returned instead of failing with a nil result."
       (let ((msg (car messages)))
         (save-excursion
           (cond
+           ((string-match "Patterns not matched:" msg)
+            (let ((patterns (substring msg (match-end 0)))) ;; patterns to match
+            (end-of-line) ;; assuming that the case expression is on multiple lines and that "of" is at the end of the line
+            (dolist (pattern (split-string patterns "\n" t " ")) ;; for each pattern
+              (haskell-indentation-newline-and-indent) ;; insert a line
+              (insert (string-trim pattern)) ;; add the pattern
+              (insert " -> _")))) ;; and some placeholder expression
            ((string-match "A do-notation statement discarded a result of type" msg)
             (goto-char (car (dante-ident-pos-at-point)))
             (insert "_ <- "))
