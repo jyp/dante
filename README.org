@@ -63,6 +63,16 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
 You may want to be sure not to enable ~(interactive-haskell-mode)~ so
 that Dante keybindings are not hidden.
 
+*** Using dante + hlint
+
+You can activate the hlint checker in addition to the dante checker as follows:
+
+#+BEGIN_SRC elisp
+(add-hook 'dante-mode-hook
+   '(lambda () (flycheck-add-next-checker 'haskell-dante
+                '(warning . haskell-hlint)))
+#+END_SRC
+
 ** Customization
 
 Use M-x customize-group dante
