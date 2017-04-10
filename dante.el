@@ -551,7 +551,7 @@ when it is done."
   "Start a Dante worker in BUFFER for SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
-    (let* ((args (mapcar #'eval (dante-repl-command-line)))
+    (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
            (process (with-current-buffer buffer
                       (when (memq 'command-line dante-debug)
                         (message "GHCi command line: %s" (combine-and-quote-strings args)))
