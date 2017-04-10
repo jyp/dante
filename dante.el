@@ -79,8 +79,10 @@ expands to: (fun1 arg1 (λ (x) (fun2 arg2 (λ (x y) body))))."
 
 (defcustom dante-repl-command-line nil
   "Command line to start GHCi, as a list: the executable and its arguments.
-When nil, dante will guess the value depending on `dante-project-root' contents.
-Customize as a file or directory variable."
+When nil, dante will guess the value depending on
+`dante-project-root' contents.  Customize as a file or directory
+variable. Each element of the list is evaluated before being
+passed to the shell."
   :group 'dante
   :type '(repeat string))
 
@@ -108,12 +110,12 @@ look for a .cabal file, or use the current dir)."
   (cl-some (lambda (file) (when (file-exists-p (concat root file)) cmdline)) files))
 
 (defconst dante-repl-command-line-default-methods
-  `((styx  . ,(lambda (root) (dante-repl-by-file root '("styx.yaml") '("styx" "repl"))))
+  `((styx  . ,(lambda (root) (dante-repl-by-file root '("styx.yaml") '("styx" "repl" dante-target))))
     (nix   . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
-                                                      '("nix-shell" "--run" "cabal repl"))))
-    (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl"))))
-    (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl"))))
-    (bare  . ,(lambda (_) '("cabal" "repl"))))
+                                                      '("nix-shell" "--run" (if dante-target (concat "cabal repl " dante-target) "cabal repl")))))
+    (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl" dante-target))))
+    (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl" dante-target))))
+    (bare  . ,(lambda (_) '("cabal" "repl" dante-target))))
   "Default GHCi launch command lines.")
 
 (defcustom dante-repl-command-line-methods-alist dante-repl-command-line-default-methods
@@ -549,7 +551,7 @@ when it is done."
   "Start a Dante worker in BUFFER for SOURCE-BUFFER."
   (if (eq (buffer-local-value 'dante-state buffer) 'dead)
       buffer
-    (let* ((args (append (dante-repl-command-line) (list (or dante-target ""))))
+    (let* ((args (mapcar #'eval (dante-repl-command-line)))
            (process (with-current-buffer buffer
                       (when (memq 'command-line dante-debug)
                         (message "GHCi command line: %s" (combine-and-quote-strings args)))
@@ -640,7 +642,7 @@ This is a standard process sentinel function."
   (insert
    (propertize
     (concat
-     "This where GHCi output is bufferized. This buffer is normally hidden,
+     "This is where GHCi output is bufferized. This buffer is normally hidden,
 but a problem occcured.
 
 EXTRA TROUBLESHOOTING INFO
