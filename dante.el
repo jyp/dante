@@ -870,7 +870,7 @@ a list is returned instead of failing with a nil result."
            ((string-match "A do-notation statement discarded a result of type" msg)
             (goto-char (car (dante-ident-pos-at-point)))
             (insert "_ <- "))
-           ((string-match "Failed to load interface for ‘\\(.*\\)’\n[ ]*Perhaps you meant \\([^ ]*\\)" msg)
+           ((string-match "Failed to load interface for ‘\\(.*\\)’\n[ ]*Perhaps you meant[ \n]*\\([^ ]*\\)" msg)
             (let ((replacement (match-string 2 msg)))
               (search-forward (match-string 1 msg))
               ;; ^^ delete-region may garble the matches
