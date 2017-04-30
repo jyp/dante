@@ -252,7 +252,7 @@ If `haskell-mode' is loaded, just return EXPRESSION."
         (help-xref-following nil)
         (origin (buffer-name)))
     (dante-cps-let ((_load-message (dante-async-load-current-buffer t))
-              (info (dante-async-call (format ":i %s" ident))))
+                    (info (dante-async-call (format ":i %s" ident))))
       (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                        (called-interactively-p 'interactive))
       (save-excursion
@@ -533,7 +533,11 @@ x:\\foo\\bar (i.e., Windows)."
   "Restart the process with the same configuration as before."
   (interactive)
   (when (dante-buffer-p) (dante-destroy))
-  (dante-start (lambda (_buffer done) (funcall done))))
+  (let ((fm-enabled flycheck-mode))
+    (flycheck-mode -1) ;; because flycheck gets confused when dante is restarted.
+    (dante-cps-let (((_buffer done) (dante-start)))
+      (when fm-enabled (flycheck-mode 1))
+      (funcall done))))
 
 (defun dante-start (cont) ;; TODO: rename to "dante-session"
   "Run the CONT in a valid GHCi session for the current (source) buffer.
@@ -872,8 +876,8 @@ a list is returned instead of failing with a nil result."
             (insert "_ <- "))
            ((string-match "Failed to load interface for ‘\\(.*\\)’\n[ ]*Perhaps you meant[ \n]*\\([^ ]*\\)" msg)
             (let ((replacement (match-string 2 msg)))
-              (search-forward (match-string 1 msg))
               ;; ^^ delete-region may garble the matches
+              (search-forward (match-string 1 msg))
               (delete-region (match-beginning 0) (point))
               (insert replacement)))
            ((string-match "Perhaps you meant ‘\\([^‘]*\\)’" msg)
