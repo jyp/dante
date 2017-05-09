@@ -95,7 +95,8 @@ Customize as a file or directory variable."
 
 (defcustom dante-target nil
   "The target to demand from cabal repl, as a string or nil.
-Customize as a file or directory variable."
+Customize as a file or directory variable.  Different targets
+will be in different GHCi sessions."
   :group 'dante
   :type '(choice (const nil) string))
 
