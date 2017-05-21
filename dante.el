@@ -817,19 +817,24 @@ a list is returned instead of failing with a nil result."
   "Prepend FILENAME with the dante running directory."
   (concat (with-current-buffer (dante-buffer-p) default-directory) filename))
 
-(defun dante--make-xref (string nm)
+(defun dante--make-xref (string _nm)
   "Turn the GHCi reference STRING in to an xref with description NM."
   (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
                       string)
-    (let ((file (match-string 1 string))
-          (line (string-to-number (match-string 2 string)))
-          (col (string-to-number (match-string 3 string))))
-      (xref-make nm (xref-make-file-location
-                     (if (string= file (dante-temp-file-name (current-buffer)))
-                         (buffer-file-name)
-                       (dante-expand-filename file))
-                     line
-                     (1- col))))))
+    (let* ((file (match-string 1 string))
+           (line (string-to-number (match-string 2 string)))
+           (col (string-to-number (match-string 3 string)))
+           (end (match-end 0))
+           (file (if (string= file (dante-temp-file-name (current-buffer)))
+                     (buffer-file-name)
+                   file))
+           (nm (nth (1- line) (s-lines (f-read-text file)))))
+      (cl-values
+       (xref-make nm (xref-make-file-location
+                            file
+                            line
+                            (1- col)))
+       end))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (dante-cps-let ((ret (blocking-call))
@@ -845,9 +850,10 @@ a list is returned instead of failing with a nil result."
     (let* ((xref (dante--make-xref result "ref"))
            (refs nil))
       (while xref
-        (setq result (substring result (match-end 0)))
-        (push xref refs)
-        (setq xref (dante--make-xref result "ref")))
+        (cl-multiple-value-bind (ref end) xref
+          (setq result (substring result end))
+          (push ref refs)
+          (setq xref (dante--make-xref result "ref"))))
       (funcall ret (nreverse refs)))))
 
 (add-hook 'xref-backend-functions 'dante--xref-backend)
