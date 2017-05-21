@@ -12,7 +12,7 @@
 ;; URL: https://github.com/jyp/dante
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((flycheck "0.30") (emacs "25.1") (dash "2.13.0"))
+;; Package-Requires: ((flycheck "0.30") (emacs "25.1") (dash "2.13.0") (f "0.19.0") (s "1.11.0"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -818,12 +818,14 @@ a list is returned instead of failing with a nil result."
   (concat (with-current-buffer (dante-buffer-p) default-directory) filename))
 
 (defun dante--make-xref (summary file line col)
+  "Make an xref object for the location FILE LINE COL with the given SUMMARY."
   (let ((file (if (string= file (dante-temp-file-name (current-buffer)))
                   (buffer-file-name)
                 file)))
     (xref-make summary (xref-make-file-location file line (1- col)))))
 
 (defun dante--match-src-span (string)
+  "Extract a list of source spans from a STRING."
   (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
                       string)
     (let ((file (match-string 1 string))
@@ -832,13 +834,15 @@ a list is returned instead of failing with a nil result."
       (list file line col))))
 
 (defun dante--summarize-src-spans (file &rest spans)
+  "Add summary strings to a list of source SPANS in FILE."
   (when file
-    (let* ((lines (s-lines (f-read-text file)))
+    (let* ((lines (s-lines (f-read file)))
            (wanted (--map (1- (nth 1 it)) spans))
            (lines (-select-by-indices wanted lines)))
       (-zip-with #'cons lines spans))))
 
 (defun dante--make-xrefs (string)
+  "Make xref objects for the source spans in STRING."
   (let* ((lines (s-lines string))
          (matches (-map #'dante--match-src-span lines))
          (grouped (-group-by #'car matches))
