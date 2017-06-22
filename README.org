@@ -70,7 +70,7 @@ You can activate the hlint checker in addition to the dante checker as follows:
 #+BEGIN_SRC elisp
 (add-hook 'dante-mode-hook
    '(lambda () (flycheck-add-next-checker 'haskell-dante
-                '(warning . haskell-hlint)))
+                '(warning . haskell-hlint))))
 #+END_SRC
 
 ** Customization
