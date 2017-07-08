@@ -118,6 +118,10 @@ otherwise look for a .cabal file, or use the current dir."
                                                       '("nix-shell" "--run" (if dante-target (concat "cabal repl " dante-target) "cabal repl")))))
     (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl" dante-target))))
     (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl" dante-target))))
+    (new-build . ,(lambda (root)
+                    (when (or (directory-files root nil ".*\\.cabal$")
+                              (file-exists-p "cabal.project"))
+                      '("cabal" "new-repl" dante-target))))
     (bare  . ,(lambda (_) '("cabal" "repl" dante-target))))
   "Default GHCi launch command lines.")
 
