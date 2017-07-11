@@ -45,6 +45,8 @@
 (require 'dash)
 (require 'xref)
 (require 'flycheck)
+(require 'f)
+(require 's)
 (eval-when-compile
   (require 'wid-edit))
 
