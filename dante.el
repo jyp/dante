@@ -12,7 +12,7 @@
 ;; URL: https://github.com/jyp/dante
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((flycheck "0.30") (emacs "25.1") (dash "2.13.0") (f "0.19.0") (s "1.11.0"))
+;; Package-Requires: ((dash "2.13.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (s "1.11.0"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -39,12 +39,12 @@
 
 ;;; Code:
 
-(require 'json)
 (require 'cl-lib)
-(require 'eldoc)
 (require 'dash)
-(require 'xref)
+(require 'eldoc)
 (require 'flycheck)
+(require 'json)
+(require 'xref)
 (eval-when-compile
   (require 'wid-edit))
 
