@@ -12,7 +12,7 @@
 ;; URL: https://github.com/jyp/dante
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((dash "2.13.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (s "1.11.0"))
+;; Package-Requires: ((dash "2.13.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (haskell-mode "13.14") (s "1.11.0"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -42,8 +42,11 @@
 (require 'cl-lib)
 (require 'dash)
 (require 'eldoc)
+(require 'f)
 (require 'flycheck)
+(require 'haskell-mode)
 (require 'json)
+(require 's)
 (require 'xref)
 (eval-when-compile
   (require 'wid-edit))
@@ -137,6 +140,8 @@ configuration for your project, customize
 variable."
   :type '(alist :key-type symbol :value-type function))
 ;; (setq dante-repl-command-line-methods-alist dante-repl-command-line-default-methods)
+
+(defvar dante-command-line)
 
 (defun dante-repl-command-line ()
   "Return the command line for running GHCi.
