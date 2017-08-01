@@ -894,6 +894,14 @@ a list is returned instead of failing with a nil result."
       (let ((msg (car messages)))
         (save-excursion
           (cond
+           ((string-match "add (\\(.*\\)) to the context of[\n ]*the type signature for:[ \n]*\\([^ ]*\\) ::" msg)
+            (let ((missing-constraint (match-string 1 msg))
+                  (function-name (match-string 2 msg)))
+              (search-backward-regexp (concat (regexp-quote function-name) "[ \t]*::[ \t]*" )) ; find type sig
+              (goto-char (match-end 0))
+              (when (looking-at "forall\\|∀") ; skip quantifiers
+                (search-forward-regexp "[.][ \t]*"))
+              (insert (concat missing-constraint " => "))))
            ((string-match "Unticked promoted constructor" msg)
             (goto-char (car (dante-ident-pos-at-point)))
             (insert "'"))
