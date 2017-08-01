@@ -405,7 +405,7 @@ CHECKER and BUFFER are added to each item parsed from STRING."
 ;; Source buffer operations
 
 (defun dante-thing-at-point ()
-  "Return (list START END) of something at the point."
+  "Return (list START END) of a relevant thing at the point, or the region if it is active."
   (if (region-active-p)
       (list (region-beginning) (region-end))
     (dante-ident-pos-at-point)))
@@ -894,6 +894,9 @@ a list is returned instead of failing with a nil result."
       (let ((msg (car messages)))
         (save-excursion
           (cond
+           ((string-match "Unticked promoted constructor" msg)
+            (goto-char (car (dante-ident-pos-at-point)))
+            (insert "'"))
            ((string-match "Patterns not matched:" msg)
             (let ((patterns (substring msg (match-end 0)))) ;; patterns to match
             (end-of-line) ;; assuming that the case expression is on multiple lines and that "of" is at the end of the line
