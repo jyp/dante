@@ -910,12 +910,16 @@ a list is returned instead of failing with a nil result."
             (goto-char (car (dante-ident-pos-at-point)))
             (insert "'"))
            ((string-match "Patterns not matched:" msg)
-            (let ((patterns (substring msg (match-end 0)))) ;; patterns to match
-            (end-of-line) ;; assuming that the case expression is on multiple lines and that "of" is at the end of the line
-            (dolist (pattern (split-string patterns "\n" t " ")) ;; for each pattern
-              (haskell-indentation-newline-and-indent) ;; insert a line
-              (insert (string-trim pattern)) ;; add the pattern
-              (insert " -> _")))) ;; and some placeholder expression
+            (let ((patterns (mapcar #'string-trim (split-string (substring msg (match-end 0)) "\n" t " ")))) ;; patterns to match
+            (if (string-match "In an equation for ‘\\(.*\\)’:" msg)
+                (let ((function-name (match-string 1 msg)))
+                  (end-of-line)
+                  (dolist (pattern patterns)
+                    (insert (concat "\n" function-name " " pattern " = _"))))
+              (end-of-line) ;; assuming that the case expression is on multiple lines and that "of" is at the end of the line
+              (dolist (pattern patterns)
+                (haskell-indentation-newline-and-indent)
+                (insert (concat pattern " -> _"))))))
            ((string-match "A do-notation statement discarded a result of type" msg)
             (goto-char (car (dante-ident-pos-at-point)))
             (insert "_ <- "))
