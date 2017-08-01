@@ -886,7 +886,7 @@ a list is returned instead of failing with a nil result."
   :type '(repeat string))
 
 (defun dante-auto-fix (pos)
-  "Attempt to fix the flycheck error at POS."
+  "Attempt to fix the flycheck error or warning at POS."
   (interactive "d")
   (let ((messages (delq nil (mapcar #'flycheck-error-message
                                     (flycheck-overlay-errors-at pos)))))
@@ -894,6 +894,10 @@ a list is returned instead of failing with a nil result."
       (let ((msg (car messages)))
         (save-excursion
           (cond
+           ((string-match "The type signature for ‘\\(.*\\)’ lacks an accompanying binding" msg)
+            (beginning-of-line)
+            (forward-line)
+            (insert (concat (match-string 1 msg) " = _\n")))
            ((string-match "add (\\(.*\\)) to the context of[\n ]*the type signature for:[ \n]*\\([^ ]*\\) ::" msg)
             (let ((missing-constraint (match-string 1 msg))
                   (function-name (match-string 2 msg)))
