@@ -108,8 +108,8 @@ will be in different GHCi sessions."
 If `dante-project-root' is set as a variable, return that,
 otherwise look for a .cabal file, or use the current dir."
   (file-name-as-directory
-                (or dante-project-root
-                    (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name))))))
+   (or dante-project-root
+       (setq dante-project-root (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name)))))))
 
 (defun dante-repl-by-file (root files cmdline)
   "Return if ROOT / file exists for any file in FILES, return CMDLINE."
