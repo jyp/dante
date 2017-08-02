@@ -894,6 +894,12 @@ a list is returned instead of failing with a nil result."
       (let ((msg (car messages)))
         (save-excursion
           (cond
+           ((string-match "Redundant constraint: \\(.*\\)" msg)
+            (let ((constraint (match-string 1 msg)))
+              (search-forward constraint) ; find type sig
+              (delete-region (match-beginning 0) (match-end 0))
+              (when (looking-at "[ \t]*,")
+                (delete-region (point) (search-forward-regexp ",[\t ]")))))
            ((string-match "The type signature for ‘\\(.*\\)’ lacks an accompanying binding" msg)
             (beginning-of-line)
             (forward-line)
