@@ -924,6 +924,7 @@ a list is returned instead of failing with a nil result."
       (let ((msg (car messages)))
         (save-excursion
           (cond
+           ;; use (set-selective-display 12) to see all possible matches
            ((string-match "Redundant constraint: \\(.*\\)" msg)
             (let ((constraint (match-string 1 msg)))
               (search-forward constraint) ; find type sig
