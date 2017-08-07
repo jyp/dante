@@ -965,6 +965,15 @@ a list is returned instead of failing with a nil result."
               (search-forward (match-string 1 msg))
               (delete-region (match-beginning 0) (point))
               (insert replacement)))
+           ((string-match "Perhaps you want to add ‘\\(.*\\)’ to the import list in the import of[ \n\t]*‘.*’ ([^:]*:\\([0-9]*\\):[0-9]*-\\([0-9]*\\))" msg)
+            (let ((missing (match-string 1 msg))
+                  (line (string-to-number (match-string 2 msg)))
+                  (end-col (string-to-number (match-string 3 msg))))
+            (goto-line line)
+            (move-to-column (1- end-col))
+            (skip-chars-backward " \t")
+            (unless (looking-back "(") (insert ","))
+            (insert missing)))
            ((string-match "Perhaps you meant ‘\\([^‘]*\\)’" msg)
             (let ((replacement (match-string 1 msg)))
               ;; ^^ delete-region may garble the matches
@@ -982,7 +991,7 @@ a list is returned instead of failing with a nil result."
            ((string-match "The import of ‘.*’ is redundant" msg)
             (beginning-of-line)
             (delete-region (point) (progn (next-logical-line) (point))))
-           (t (message "Cannot fix the issue at point automatically. Perhaps customize `dante-suggestible-extensions'."))))))))
+           (t (error "Cannot fix the issue at point automatically. Perhaps customize `dante-suggestible-extensions'."))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
