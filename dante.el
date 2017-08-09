@@ -924,7 +924,7 @@ a list is returned instead of failing with a nil result."
       (let ((msg (car messages)))
         (save-excursion
           (cond
-           ;; use (set-selective-display 12) to see all possible matches
+           ;; use (set-selective-display 12) to see an outline of all possible matches
            ((string-match "Redundant constraints?: (?\\([^,)\n]*\\)" msg)
             (let ((constraint (match-string 1 msg)))
               (search-forward constraint) ; find type sig
@@ -943,7 +943,8 @@ a list is returned instead of failing with a nil result."
               (search-backward-regexp (concat (regexp-quote function-name) "[ \t]*::[ \t]*" )) ; find type sig
               (goto-char (match-end 0))
               (when (looking-at "forall\\|∀") ; skip quantifiers
-                (search-forward-regexp "[.][ \t]*"))
+                (search-forward-regexp "\\."))
+              (skip-chars-forward "\n\t ") ; skip spaces
               (insert (concat missing-constraint " => "))))
            ((string-match "Unticked promoted constructor" msg)
             (goto-char (car (dante-ident-pos-at-point)))
