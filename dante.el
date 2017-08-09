@@ -925,12 +925,14 @@ a list is returned instead of failing with a nil result."
         (save-excursion
           (cond
            ;; use (set-selective-display 12) to see all possible matches
-           ((string-match "Redundant constraint: \\(.*\\)" msg)
+           ((string-match "Redundant constraints?: (?\\([^,)\n]*\\)" msg)
             (let ((constraint (match-string 1 msg)))
               (search-forward constraint) ; find type sig
               (delete-region (match-beginning 0) (match-end 0))
               (when (looking-at "[ \t]*,")
-                (delete-region (point) (search-forward-regexp ",[\t ]")))))
+                (delete-region (point) (search-forward-regexp ",")))
+              (when (looking-at "[ \t]*=>")
+                (delete-region (point) (search-forward-regexp "=>")))))
            ((string-match "The type signature for ‘\\(.*\\)’ lacks an accompanying binding" msg)
             (beginning-of-line)
             (forward-line)
@@ -980,19 +982,23 @@ a list is returned instead of failing with a nil result."
               ;; ^^ delete-region may garble the matches
               (apply #'delete-region (dante-ident-pos-at-point))
               (insert replacement)))
-           ((--any? (string-match it msg) dante-suggestible-extensions)
-            (goto-char 1)
-            (insert (concat "{-# LANGUAGE " (car (--filter (string-match it msg) dante-suggestible-extensions)) " #-}\n")))
            ((string-match "Top-level binding with no type signature:[\n ]*" msg)
             (beginning-of-line)
             (insert (concat (substring msg (match-end 0)) "\n")))
            ((string-match "Defined but not used" msg)
             (goto-char (car (dante-ident-pos-at-point)))
             (insert "_"))
+           ((string-match "Unused quantified type variable ‘\\(.*\\)’" msg)
+            ;; note there can be a kind annotation, not just a variable.
+            (delete-region (point) (+ (point) (- (match-end 1) (match-beginning 1)))))
            ((string-match "The import of ‘.*’ is redundant" msg)
             (beginning-of-line)
             (delete-region (point) (progn (next-logical-line) (point))))
-           (t (error "Cannot fix the issue at point automatically. Perhaps customize `dante-suggestible-extensions'."))))))))
+           ((--any? (string-match it msg) dante-suggestible-extensions)
+            (goto-char 1)
+            (insert (concat "{-# LANGUAGE " (car (--filter (string-match it msg) dante-suggestible-extensions)) " #-}\n")))
+           (t (error "Cannot fix the issue at point automatically. Perhaps customize `dante-suggestible-extensions'.")))
+          (when (looking-back "[ \t]") (delete-region (point) (+ (point) (skip-chars-forward " \t")))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
