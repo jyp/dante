@@ -983,6 +983,15 @@ a list is returned instead of failing with a nil result."
               ;; ^^ delete-region may garble the matches
               (apply #'delete-region (dante-ident-pos-at-point))
               (insert replacement)))
+           ((string-match "Perhaps you meant one of these:" msg)
+            (let* ((replacements
+                    (-map (lambda (r)
+                            (string-match "‘\\(.*\\)’ (line [0-9]*)" r)
+                            (match-string 1 r))
+                          (split-string (substring msg (match-end 0)) "," t " ")))
+                   (replacement (completing-read "replacement: " replacements)))
+              (apply #'delete-region (dante-ident-pos-at-point))
+              (insert replacement)))
            ((string-match "Top-level binding with no type signature:[\n ]*" msg)
             (beginning-of-line)
             (insert (concat (substring msg (match-end 0)) "\n")))
