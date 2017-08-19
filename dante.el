@@ -856,51 +856,44 @@ a list is returned instead of failing with a nil result."
   "Prepend FILENAME with the dante running directory."
   (concat (with-current-buffer (dante-buffer-p) default-directory) filename))
 
-(defun dante--make-xref (summary file line col)
-  "Make an xref object for the location FILE LINE COL with the given SUMMARY."
-  (let ((file (if (string= file (dante-temp-file-name (current-buffer)))
-                  (buffer-file-name)
-                file)))
-    (xref-make summary (xref-make-file-location file line (1- col)))))
-
 (defun dante--match-src-span (string)
-  "Extract a list of source spans from a STRING."
-  (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$"
-                      string)
+  "Extract a location from a ghc span STRING."
+  (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$" string)
     (let ((file (match-string 1 string))
           (line (string-to-number (match-string 2 string)))
           (col (string-to-number (match-string 3 string))))
-      (list file line col))))
+      (xref-make-file-location
+       (if (string= file (dante-temp-file-name (current-buffer)))
+           (buffer-file-name)
+         (expand-file-name file dante-project-root))
+       line (1- col)))))
 
-(defun dante--summarize-src-spans (file &rest spans)
+(defun dante--summarize-src-spans (spans file)
   "Add summary strings to a list of source SPANS in FILE."
-  (when file
+  (if (not (and file (file-readable-p file)))
+      (--map (xref-make "<unreadable>" it) spans)
     (let* ((lines (s-lines (f-read file)))
-           (wanted (--map (1- (nth 1 it)) spans))
+           (wanted (--map (1- (oref it line)) spans))
            (lines (-select-by-indices wanted lines)))
-      (-zip-with #'cons lines spans))))
+      (-zip-with #'xref-make lines spans))))
 
 (defun dante--make-xrefs (string)
   "Make xref objects for the source spans in STRING."
-  (let* ((lines (s-lines string))
-         (matches (-map #'dante--match-src-span lines))
-         (grouped (-group-by #'car matches))
-         (summarized (--mapcat (--sort (< (nth 2 it) (nth 2 other))
-                                       (apply #'dante--summarize-src-spans it))
-                               grouped)))
-    (--map (apply #'dante--make-xref it) summarized)))
+  (--mapcat (funcall #'dante--summarize-src-spans (cdr it) (car it))
+            (--group-by (oref it file) (-map #'dante--match-src-span
+                                             (lines (s-lines string))))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (dante-cps-let ((ret (blocking-call))
-            (_load-messages (dante-async-load-current-buffer nil))
-            (target (dante-async-call (concat ":loc-at " symbol))))
+                  (_load-messages (dante-async-load-current-buffer nil))
+                  (target (dante-async-call (concat ":loc-at " symbol))))
     (let ((xrefs (dante--make-xrefs target)))
       (funcall ret xrefs))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
   (dante-cps-let ((ret (blocking-call))
-            (_load-messages (dante-async-load-current-buffer nil))
-            (result (dante-async-call (concat ":uses " symbol))))
+                  (_load-messages (dante-async-load-current-buffer nil))
+                  (result (dante-async-call (concat ":uses " symbol))))
     (let ((xrefs (dante--make-xrefs result)))
       (funcall ret xrefs))))
 
