@@ -4,7 +4,8 @@
 [[https://melpa.org/#/dante][https://melpa.org/packages/dante-badge.svg]]
 [[https://stable.melpa.org/#/dante][https://stable.melpa.org/packages/dante-badge.svg]]
 
-Dante is a fork of Intero mode. It steals many good ideas from Intero,
+Dante is a fork of Intero mode which aims exclusively at providing a
+convenient frontend to GHCi. It steals good ideas from Intero,
 but it aims for light weightedness (see below for a detailed
 comparison).
 
@@ -13,6 +14,7 @@ comparison).
 | Feature                                 | Command               | Keybinding |
 |-----------------------------------------+-----------------------+------------|
 | Flycheck type checking                  | flycheck-mode         |            |
+| Company completion                      | company-mode          |            |
 | Type of selection                       | dante-type-at         | C-c .      |
 | Info at point                           | dante-info            | C-c ,      |
 | Apply Ghc suggestion for error at point | dante-auto-fix        | C-c /      |
@@ -61,9 +63,6 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
     (add-hook 'haskell-mode-hook 'flycheck-mode))
 #+END_SRC
 
-You may want to be sure not to enable ~(interactive-haskell-mode)~ so
-that Dante keybindings are not hidden.
-
 *** Using dante + hlint
 
 You can activate the hlint checker in addition to the dante checker as follows:
@@ -75,18 +74,20 @@ You can activate the hlint checker in addition to the dante checker as follows:
 #+END_SRC
 
 ** Customization
-
-Use M-x customize-group dante
+Customization can be important to make sure that GHCi is properly
+loaded by dante.  Use ~M-x customize-group dante~ to read the
+documentation.
 ** Comparison with Intero
 
 To the best of my knowledge, here is how Dante compares with Intero:
 
 - Dante has no dependency on "Stack"
 - Dante's Emacs code is about half as long as that of Intero.
-- Dante does not depend on custom Haskell code, contrary to intero. Thus,
-  it will if (and only if) GHCi works for your project. (Including via "Stack").
+- Dante does not depend on custom Haskell code, contrary to
+  Intero. Thus, it will work if (and only if) GHCi works for your
+  project. (Including via "Stack".)
 - Dante supports  ~xref-find-definitions~ and ~xref-find-references~.
 - With Dante, Flychecking is optional (yet recommended), whereas
   Intero demands that you flycheck your code.
 - Dante has has a different approach to Haskell evaluation
-- Dante offers no support for Hoogle nor eldoc.
+- Dante offers no support for eldoc, nor Hoogle.
