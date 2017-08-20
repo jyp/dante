@@ -54,6 +54,7 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
 #+BEGIN_SRC elisp
   (use-package dante
     :ensure t
+    :after haskell-mode
     :commands 'dante-mode
     :init
     (add-hook 'haskell-mode-hook 'dante-mode)
