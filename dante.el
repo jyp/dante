@@ -952,11 +952,12 @@ a list is returned instead of failing with a nil result."
             (let ((missing (match-string 1 msg))
                   (line (string-to-number (match-string 2 msg)))
                   (end-col (string-to-number (match-string 3 msg))))
-            (goto-line line)
-            (move-to-column (1- end-col))
-            (skip-chars-backward " \t")
-            (unless (looking-back "(") (insert ","))
-            (insert missing)))
+              (goto-char (point-min))
+              (forward-line (1- line))
+              (move-to-column (1- end-col))
+              (skip-chars-backward " \t")
+              (unless (looking-back "(") (insert ","))
+              (insert missing)))
            ((string-match "Perhaps you meant ‘\\([^‘]*\\)’" msg)
             (let ((replacement (match-string 1 msg)))
               ;; ^^ delete-region may garble the matches
@@ -993,7 +994,7 @@ a list is returned instead of failing with a nil result."
            ((--any? (string-match it msg) dante-suggestible-extensions)
             (goto-char 1)
             (insert (concat "{-# LANGUAGE " (car (--filter (string-match it msg) dante-suggestible-extensions)) " #-}\n")))
-           (t (error "Cannot fix the issue at point automatically. Perhaps customize `dante-suggestible-extensions'.")))
+           (t (error "Cannot fix the issue at point automatically")))
           (when (looking-back "[ \t]") (delete-region (point) (+ (point) (skip-chars-forward " \t")))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
