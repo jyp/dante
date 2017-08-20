@@ -404,38 +404,30 @@ CHECKER and BUFFER are added to each item parsed from STRING."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Company integration (auto-completion)
 
-(defun company-dante (command &optional arg &rest ignored)
-  "Company source for dante, with the standard COMMAND and ARG args.
-Other arguments are IGNORED."
-  (interactive (list 'interactive))
-  (cl-case command
-    (interactive (company-begin-backend 'company-dante))
-    (prefix (current-word))
+(defun dante-company (command &rest _args)
+  "Company backend for dante.
+See ``company-backends'' for the meaning of COMMAND and _ARGS."
+  (let ((prefix (buffer-substring-no-properties (car (dante-indent-pos-at-point)) (point))))
+    (cl-case command
+      (interactive (company-begin-backend 'company-dante))
+      (sorted t)
+      (prefix (when dante-mode prefix))
     (candidates
      (unless (eq (dante-state) 'dead)
        (cons :async
-             (-partial 'dante-get-repl-completions
-                       (current-buffer)
-                       (current-word)))))))
+             (lambda (ret)
+               (dante-cps-let ((_load-messages (dante-async-load-current-buffer nil))
+                               (reply (dante-async-call (format ":complete repl %S" prefix))))
+                 (funcall ret (--map (replace-regexp-in-string "\\\"" "" it)
+                                     (cdr (s-lines reply))))))))))))
 
-(defun dante-get-repl-completions (source-buffer prefix cont)
-  "Get REPL completions and send to SOURCE-BUFFER.
-Completions for PREFIX are passed to CONT in SOURCE-BUFFER."
-  (dante-cps-let ((reply (dante-async-call (format ":complete repl %S" prefix))))
-    (with-current-buffer
-        source-buffer
-      (funcall
-       cont
-       (mapcar
-        (lambda (x)
-          (replace-regexp-in-string "\\\"" "" x))
-        (cdr (split-string reply "\n" t)))))))
-
+(with-eval-after-load 'company
+  (add-to-list 'company-backends 'dante-company))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Source buffer operations
 
 (defun dante-thing-at-point ()
-  "Return (list START END) of a relevant thing at the point, or the region if it is active."
+  "Return (list START END) the indent at point, or the region if it is active."
   (if (region-active-p)
       (list (region-beginning) (region-end))
     (dante-ident-pos-at-point)))
@@ -445,18 +437,12 @@ Completions for PREFIX are passed to CONT in SOURCE-BUFFER."
 May return a qualified name."
   (let ((reg (dante-ident-pos-at-point)))
     (when reg
-      (buffer-substring-no-properties (car reg) (cadr reg)))))
+      (apply #'buffer-substring-no-properties reg))))
 
 (defun dante-ident-pos-at-point ()
   "Return the span of the identifier under point, or nil if none found.
 May return a qualified name."
   (save-excursion
-    ;; Skip whitespace if we're on it.  That way, if we're at "map ", we'll
-    ;; see the word "map".
-    (if (and (not (eobp))
-             (eq ?  (char-syntax (char-after))))
-        (skip-chars-backward " \t"))
-
     (let ((case-fold-search nil))
       (cl-multiple-value-bind (start end)
           (list
