@@ -404,22 +404,24 @@ CHECKER and BUFFER are added to each item parsed from STRING."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Company integration (auto-completion)
 
-(defun dante-company (command &rest _args)
+(defun dante-company (command &optional _arg &rest _ignored)
   "Company backend for dante.
 See ``company-backends'' for the meaning of COMMAND and _ARGS."
-  (let ((prefix (buffer-substring-no-properties (car (dante-indent-pos-at-point)) (point))))
+  (let ((prefix (when dante-mode
+                  (let ((id-pos (dante-ident-pos-at-point)))
+                    (when id-pos (buffer-substring-no-properties (car id-pos) (point)))))))
     (cl-case command
       (interactive (company-begin-backend 'company-dante))
       (sorted t)
-      (prefix (when dante-mode prefix))
-    (candidates
-     (unless (eq (dante-state) 'dead)
-       (cons :async
-             (lambda (ret)
-               (dante-cps-let ((_load-messages (dante-async-load-current-buffer nil))
-                               (reply (dante-async-call (format ":complete repl %S" prefix))))
-                 (funcall ret (--map (replace-regexp-in-string "\\\"" "" it)
-                                     (cdr (s-lines reply))))))))))))
+      (prefix prefix)
+      (candidates
+       (unless (eq (dante-state) 'dead)
+         (cons :async
+               (lambda (ret)
+                 (dante-cps-let ((_load-messages (dante-async-load-current-buffer nil))
+                                 (reply (dante-async-call (format ":complete repl %S" prefix))))
+                   (funcall ret (--map (replace-regexp-in-string "\\\"" "" it)
+                                       (cdr (s-lines reply))))))))))))
 
 (with-eval-after-load 'company
   (add-to-list 'company-backends 'dante-company))
