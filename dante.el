@@ -407,9 +407,14 @@ CHECKER and BUFFER are added to each item parsed from STRING."
 (defun dante-company (command &optional _arg &rest _ignored)
   "Company backend for dante.
 See ``company-backends'' for the meaning of COMMAND and _ARGS."
-  (let ((prefix (when dante-mode
-                  (let ((id-pos (dante-ident-pos-at-point)))
-                    (when id-pos (buffer-substring-no-properties (car id-pos) (point)))))))
+  (let ((prefix (when (and dante-mode (dante-ident-pos-at-point))
+                  (let* ((id-start (car (dante-ident-pos-at-point)))
+                         (import-found (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
+                         (import-end (match-end 0))
+                         (import-start (match-beginning 0))
+                         (is-import (eq import-end id-start)))
+                    (message "found %s end %s start %s id-start %s" import-found import-end import-start id-start)
+                    (buffer-substring-no-properties (if is-import import-start id-start) (point)))))) ;; todo: pref len
     (cl-case command
       (interactive (company-begin-backend 'company-dante))
       (sorted t)
@@ -420,8 +425,9 @@ See ``company-backends'' for the meaning of COMMAND and _ARGS."
                (lambda (ret)
                  (dante-cps-let ((_load-messages (dante-async-load-current-buffer nil))
                                  (reply (dante-async-call (format ":complete repl %S" prefix))))
-                   (funcall ret (--map (replace-regexp-in-string "\\\"" "" it)
-                                       (cdr (s-lines reply))))))))))))
+                   (let* ((lines (s-lines reply))
+                          (common (nth 2 (read (concat "(" (car lines) ")")))))
+                     (funcall ret (--map (replace-regexp-in-string "\\\"" "" (concat common it)) (cdr lines))))))))))))
 
 (with-eval-after-load 'company
   (add-to-list 'company-backends 'dante-company))
