@@ -41,15 +41,11 @@
 
 (require 'cl-lib)
 (require 'dash)
-(require 'eldoc)
 (require 'f)
 (require 'flycheck)
 (require 'haskell-mode)
-(require 'json)
 (require 's)
 (require 'xref)
-(eval-when-compile
-  (require 'wid-edit))
 
 (defmacro dante-cps-bind (vars expr &rest body)
   "Bind VARS in a continuation passed to EXPR with contents BODY.
@@ -964,7 +960,7 @@ a list is returned instead of failing with a nil result."
               (forward-line (1- line))
               (move-to-column (1- end-col))
               (skip-chars-backward " \t")
-              (unless (looking-back "(") (insert ","))
+              (unless (looking-back "(" (- (point) 2)) (insert ","))
               (insert missing)))
            ((string-match "Perhaps you meant ‘\\([^‘]*\\)’" msg)
             (let ((replacement (match-string 1 msg)))
@@ -1003,7 +999,8 @@ a list is returned instead of failing with a nil result."
             (goto-char 1)
             (insert (concat "{-# LANGUAGE " (car (--filter (string-match it msg) dante-suggestible-extensions)) " #-}\n")))
            (t (error "Cannot fix the issue at point automatically")))
-          (when (looking-back "[ \t]") (delete-region (point) (+ (point) (skip-chars-forward " \t")))))))))
+          (when (looking-back "[ \t]" (line-beginning-position))
+            (delete-region (point) (+ (point) (skip-chars-forward " \t")))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
