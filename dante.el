@@ -841,6 +841,7 @@ a list is returned instead of failing with a nil result."
 
 (defun dante--match-src-span (string)
   "Extract a location from a ghc span STRING."
+  ;; On external symbols, GHC may return a location such as integer-gmp-1.0.0.1:integer-gmp-1.0.0.1:GHC.Integer.Type
   (when (string-match "\\(.*?\\):(\\([0-9]+\\),\\([0-9]+\\))-(\\([0-9]+\\),\\([0-9]+\\))$" string)
     (let ((file (match-string 1 string))
           (line (string-to-number (match-string 2 string)))
@@ -863,8 +864,8 @@ a list is returned instead of failing with a nil result."
 (defun dante--make-xrefs (string)
   "Make xref objects for the source spans in STRING."
   (--mapcat (funcall #'dante--summarize-src-spans (cdr it) (car it))
-            (--group-by (oref it file) (-map #'dante--match-src-span
-                                             (lines (s-lines string))))))
+            (--group-by (oref it file) (-non-nil (-map #'dante--match-src-span
+                                                       (s-lines string))))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (dante-cps-let ((ret (blocking-call))
