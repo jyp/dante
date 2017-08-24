@@ -656,7 +656,7 @@ when it is done."
   "Install CONT as a callback for GHCi output.
 Called in process buffer."
     (when dante-callback
-      (error "Try to set a callback (%s)\n... but one exists already! (%s)" cont dante-callback))
+      (error "Try to set a callback (%s), but one exists already! (%s)" cont dante-callback))
     (setq dante-callback cont))
 
 (defun dante-async-call (cmd cont)
@@ -672,15 +672,12 @@ from a valid session."
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
 This is a standard process sentinel function."
-  (when (buffer-live-p (process-buffer process))
-    (when (not (process-live-p process))
-      (let ((buffer (process-buffer process)))
-        (if (eq (buffer-local-value 'dante-state buffer) 'deleting)
-            (message "GHCi process deleted.")
-          (progn
-            (with-current-buffer buffer
-              (setq dante-state 'dead))
-            (dante-show-process-problem process change)))))))
+  (let ((buffer (process-buffer process)))
+    (when (and (buffer-live-p buffer) (not (process-live-p process)))
+      (if (eq (buffer-local-value 'dante-state buffer) 'deleting)
+          (message "GHCi process deleted.")
+        (with-current-buffer buffer (setq dante-state 'dead))
+        (dante-show-process-problem process change)))))
 
 (defun dante-debug-info (buffer)
   "Show debug info for dante buffer BUFFER."
@@ -698,8 +695,7 @@ This is a standard process sentinel function."
   (insert "\n---\n\n")
   (insert
    (propertize
-    (concat
-     "This is where GHCi output is bufferized. This buffer is normally hidden,
+    (concat "This is where GHCi output is bufferized. This buffer is normally hidden,
 but a problem occcured.
 
 EXTRA TROUBLESHOOTING INFO
@@ -709,7 +705,7 @@ The GHCi process ended. Here is the reason that Emacs gives us: " change "
 
 WHAT TO DO NEXT
 
-Try to customize (probably file or directory-locally)
+Try to customize (probably file-locally or directory-locally)
 `dante-project-root' and/or `dante-repl-command-line'.  If you
 fixed the problem, just kill this buffer, Dante will make a fresh
 one and attempt to restart GHCi automatically.
@@ -739,12 +735,12 @@ Text is ACC umulated.  CONT is called with all concatenated S-IN."
   (let ((callback dante-callback)
         (string (dante--strip-carriage-returns (buffer-string))))
     (unless dante-callback (error "Received output in %s (%s) but no callback" (current-buffer) string))
-    (delete-region 1 (point-max))
+    (delete-region (point-min) (point-max))
     (setq dante-callback nil)
     (funcall callback string)))
 
 (defun dante-schedule-next (buffer)
-  "Run the next GHCi sub-session for BUFFER, if any.
+  "If GHCi is idle, run the next queued GHCi sub-session for BUFFER, if any.
 Note that sub-sessions are not interleaved."
   (unless dante-callback
     (let ((req (pop dante-queue)))
@@ -756,7 +752,7 @@ Note that sub-sessions are not interleaved."
                    (apply-partially #'dante-schedule-next buffer)))))))
 
 (defun dante--strip-carriage-returns (string)
-  "Strip the \\r from Windows \\r\\n line endings in STRING."
+  "Return the STRING stripped of its \\r occurences."
   (replace-regexp-in-string "\r" "" string))
 
 (defun dante--kill-last-newline (string)
@@ -825,7 +821,6 @@ changes.  Uses `dante-cabal-find-pkg-desc' internally."
             (let ((cabal-file (dante-cabal-find-pkg-desc root)))
               (when cabal-file
                 (throw 'found cabal-file)))
-
             (let ((proot (file-name-directory (directory-file-name root))))
               (if (equal proot root) ;; fix-point reached?
                   (throw 'found nil)
@@ -1037,12 +1032,12 @@ a list is returned instead of failing with a nil result."
                                    (- (point) 2)
                                  (line-end-position)))))
         (dante-cps-let ((_load-messages (dante-async-load-current-buffer t))
-                  (res (dante-async-call (buffer-substring-no-properties beg end))))
-             (goto-char end)
-             (skip-chars-backward "\t\n ")
-             (delete-region (point) (- (search-forward "-}") 2))
-             (backward-char 2)
-             (insert (concat "\n\n" res "\n")))))))
+                        (res (dante-async-call (buffer-substring-no-properties beg end))))
+          (goto-char end)
+          (skip-chars-backward "\t\n ")
+          (delete-region (point) (- (search-forward "-}") 2))
+          (backward-char 2)
+          (insert (concat "\n\n" res "\n")))))))
 
 (provide 'dante)
 
