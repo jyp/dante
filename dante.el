@@ -277,7 +277,7 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 
 (defun dante-async-load-current-buffer (interpret cont)
   "Load and maybe INTERPRET the temp file for buffer it and run CONT in a session."
-  (let ((fname (dante-temp-file)))
+  (let ((fname (dante-local-name (dante-temp-file))))
     (dante-cps-let (((buffer done) (dante-start))
               (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
               (load-message
@@ -321,7 +321,7 @@ Add `haskell-dante' to `flycheck-checkers'."
   "Parse flycheck errors and warnings.
 CHECKER and BUFFER are added to each item parsed from STRING."
   (let ((messages (list))
-        (temp-file (dante-temp-file-name buffer)))
+        (temp-file (dante-local-name (dante-temp-file-name buffer))))
     (while (string-match
             (concat "[\n]\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\):"
                     "[ \n]+\\([[:unibyte:][:nonascii:]]+?\\)\n[^ ]")
@@ -479,12 +479,38 @@ The path returned is canonicalized and stripped of any text properties."
 (defvar-local dante-temp-file-name nil
   "The name of a temporary file to which the current buffer's content is copied.")
 
+(defun dante-tramp-make-tramp-temp-file (buffer)
+  "Create a temporary file for BUFFER, perhaps on a remote host."
+  (let* ((fname (buffer-file-name buffer))
+         (suffix (file-name-extension fname t)))
+    (if (file-remote-p fname)
+        (with-parsed-tramp-file-name (buffer-file-name buffer) vec
+          (let ((prefix (concat
+                         (expand-file-name
+                          tramp-temp-name-prefix (tramp-get-remote-tmpdir vec))
+                         "dante"))
+                result)
+            (while (not result)
+              ;; `make-temp-file' would be the natural choice for
+              ;; implementation.  But it calls `write-region' internally,
+              ;; which also needs a temporary file - we would end in an
+              ;; infinite loop.
+              (setq result (concat (make-temp-name prefix) suffix))
+              (if (file-exists-p result)
+                  (setq result nil)
+                ;; This creates the file by side effect.
+                (set-file-times result)
+                (set-file-modes result (tramp-compat-octal-to-decimal "0700"))))
+            result))
+      (make-temp-file "dante" nil suffix))))
+
+(defun dante-local-name (fname)
+  (string-remove-prefix (or (file-remote-p fname) "") fname))
+
 (defun dante-temp-file-name (buffer)
-  "Return a filename suitable to store BUFFER's contents."
+  "Return a (possibly remote) filename suitable to store BUFFER's contents."
   (with-current-buffer buffer
-    (or dante-temp-file-name
-        (setq dante-temp-file-name
-              (dante-canonicalize-path (make-temp-file "dante" nil (file-name-extension (buffer-file-name) t)))))))
+    (or dante-temp-file-name (setq dante-temp-file-name (dante-tramp-make-tramp-temp-file buffer)))))
 
 (defvar-local dante-temp-epoch -1
   "The value of `buffer-modified-tick' when the contents were
@@ -587,7 +613,7 @@ when it is done."
                       (when (memq 'command-line dante-debug)
                         (message "GHCi command line: %s" (combine-and-quote-strings args)))
                       (message "Dante: Starting GHCi ...")
-                      (apply #'start-process "dante" buffer args))))
+                      (apply #'start-file-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (with-current-buffer buffer
         (erase-buffer)
