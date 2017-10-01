@@ -664,10 +664,10 @@ Called in process buffer."
 The result is passed to CONT as (CONT REPLY).  Can only be called
 from a valid session."
   (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
-  (let ((source-buffer (current-buffer)))
+  (let ((source-marker (point-marker)))
   (with-current-buffer (dante-buffer-p)
     (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n"))
-    (dante-async (apply-partially #'dante-wait-for-prompt source-buffer cmd "" cont)))))
+    (dante-async (apply-partially #'dante-wait-for-prompt source-marker cmd "" cont)))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -717,8 +717,8 @@ You can always run M-x dante-restart to make it try again.
 ")
     'face 'compilation-error)))
 
-(defun dante-wait-for-prompt (source-buf cmd acc cont s-in)
-  "Loop waiting for a GHCi prompt for SOURCE-BUF after CMD.
+(defun dante-wait-for-prompt (source-marker cmd acc cont s-in)
+  "Loop waiting for a GHCi prompt for SOURCE-MARKER after CMD.
 Text is ACC umulated.  CONT is called with all concatenated S-IN."
   (let ((s (concat acc s-in)))
     (if (string-match "\4\\(.*\\)|" s)
@@ -726,8 +726,8 @@ Text is ACC umulated.  CONT is called with all concatenated S-IN."
           (setq dante-loaded-modules (match-string 1 s))
           (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
             (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
-            (with-current-buffer source-buf (funcall cont string))))
-      (dante-async (apply-partially #'dante-wait-for-prompt source-buf cmd s cont)))))
+            (with-current-buffer (marker-buffer source-marker) (save-excursion (goto-char source-marker) (funcall cont string)))))
+      (dante-async (apply-partially #'dante-wait-for-prompt source-marker cmd s cont)))))
 
 
 (defun dante-read-buffer ()
