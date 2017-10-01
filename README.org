@@ -21,14 +21,14 @@ comparison).
 | Apply Ghc suggestion for error at point | dante-auto-fix        | C-c /      |
 | Goto definition                         | xref-find-definitions | M-.        |
 | Find uses                               | xref-find-references  | M-?        |
-| REPLoid (*)                             | dante-eval-block      | C-c '      |
+| REPLoid (*)                             | dante-eval-block      | C-c "      |
 | Restart                                 | dante-restart         |            |
 
 
 (*) REPLoid explanation:
 
-You can evaluate code by writing it in a comment of the form 
-~{-> [code to evaluate] -}~ and run dante-eval-block.
+You can evaluate code by writing it in a comment of the form
+~-- >>>~ and run ~dante-eval-block~.
 
 Example:
 
@@ -36,19 +36,39 @@ Example:
 example :: [String]
 example = ["This is an example", "of", "interactive", "evaluation"]
 
-{-> intercalate " " example
-
--}
+-- >>> intercalate " " example
 #+END_SRC
 In the above file, if you invoke ~dante-eval-block~ on the line
 containing "intercalate", you'll get:
 
 #+BEGIN_SRC haskell
-{-> intercalate " " example
-
-"This is an example of interactive evaluation"
--}
+-- >>> intercalate " " example
+-- "This is an example of interactive evaluation"
+--
 #+END_SRC
+
+Several commands in the same block will be executed in at once, so you
+can have local let statements.
+
+#+BEGIN_SRC haskell
+-- >>> let foo = "foo"
+--
+-- >>> foo ++ "bar"
+-- "foobar"
+---
+#+END_SRC
+
+Any GHCi command can be put in such a block, but note however that:
+
+1. There is no guarantee that a state will be maintained across
+   several calls to ~dante-eval-block~. In fact, Dante liberally calls
+   :r and :l and (re)sets various GHCi options.
+
+2. It is not supported to load and/or unload modules in such blocks,
+   or set unexpected options. This work, or may mess with Dante internals
+
+So if your goal is run your webserver/database/etc. within GHCi, you
+should not do it through dante.
 
 ** Installation
 

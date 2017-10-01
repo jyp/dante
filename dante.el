@@ -285,7 +285,7 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
                 (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
                     ":r" (concat ":l *" fname)))))
       (with-current-buffer buffer (setq dante-loaded-interpreted interpret))
-      (funcall cont load-message)
+      (funcall cont load-message) ;; FIXME!!!
       (funcall done))))
 
 (defun dante-check (checker cont)
@@ -1020,24 +1020,31 @@ a list is returned instead of failing with a nil result."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
 
+(defun dante-eval-loop (block-end)
+  (while (and (looking-at "[ \t]*--")
+              (not (looking-at "[ \t]*--[ \t]+>>>")))
+    (forward-line))
+  (if (not (search-forward-regexp "[ \t]*--[ \t]+>>>" (line-end-position) t 1))
+      (message "evaluation finished")
+    (dante-cps-let ((res (dante-async-call (buffer-substring-no-properties (point) (line-end-position)))))
+      (beginning-of-line)
+      (forward-line)
+      (delete-region (point) (or (search-forward-regexp "[ \t]*--[ \t]*$" block-end t 1) block-end))
+      (insert (apply 'concat (--map (concat "-- " it "\n") (--filter (not (s-blank? it)) (s-lines res)))))
+      (insert "--")
+      (beginning-of-line)
+      (dante-eval-loop block-end))))
+
 (defun dante-eval-block ()
-  "Evaluate the expression command found in {-> <expr> -} and insert the result."
+  "Evaluate the expression command found in >>> and insert the result."
   (interactive)
   (save-excursion
     (beginning-of-line)
-    (if (not (looking-at "{-> "))
-        (message "Not in an evaluable block. (Expecting the line to start with '{->')")
-      (let* ((beg (+ 4 (point)))
-             (end (copy-marker (if (search-forward "-}" (line-end-position) t)
-                                   (- (point) 2)
-                                 (line-end-position)))))
-        (dante-cps-let ((_load-messages (dante-async-load-current-buffer t))
-                        (res (dante-async-call (buffer-substring-no-properties beg end))))
-          (goto-char end)
-          (skip-chars-backward "\t\n ")
-          (delete-region (point) (- (search-forward "-}") 2))
-          (backward-char 2)
-          (insert (concat "\n\n" res "\n")))))))
+    (let ((block-end (save-excursion (while (looking-at "[ \t]*--") (forward-line)) (point-marker))))
+      (while (looking-at "[ \t]*--") (forward-line -1))
+      (forward-line)
+      (dante-cps-let ((_load-messages (dante-async-load-current-buffer t)))
+        (dante-eval-loop block-end)))))
 
 (provide 'dante)
 
