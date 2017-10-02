@@ -1026,12 +1026,17 @@ a list is returned instead of failing with a nil result."
     (forward-line))
   (if (not (search-forward-regexp "[ \t]*--[ \t]+>>>" (line-end-position) t 1))
       (message "evaluation finished")
+    ;; found the next command; execute it and replace the result.
     (dante-cps-let ((res (dante-async-call (buffer-substring-no-properties (point) (line-end-position)))))
       (beginning-of-line)
       (forward-line)
-      (delete-region (point) (or (search-forward-regexp "[ \t]*--[ \t]*$" block-end t 1) block-end))
+      (save-excursion
+        (delete-region (point)
+                       ;; look for: empty comment line, next command or end of block.
+                       (or (and (search-forward-regexp "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t 1)
+                                (match-beginning 0))
+                           block-end)))
       (insert (apply 'concat (--map (concat "-- " it "\n") (--filter (not (s-blank? it)) (s-lines res)))))
-      (insert "--")
       (beginning-of-line)
       (dante-eval-loop block-end))))
 
