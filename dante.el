@@ -242,8 +242,9 @@ If `haskell-mode' is loaded, just return EXPRESSION."
 When the universal argument INSERT is non-nil, insert the type in the buffer."
   (interactive "P")
   (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
-    (dante-cps-let ((_load-messages (dante-async-load-current-buffer nil))
-              (ty (dante-async-call (concat ":type-at " tap))))
+    (dante-cps-let (((done _load-messages) (dante-async-load-current-buffer nil))
+                    (ty (dante-async-call (concat ":type-at " tap))))
+      (funcall done)
       (if insert (save-excursion (goto-char (line-beginning-position))
                                  (insert (dante-fontify-expression ty) "\n"))
                  (message "%s" (dante-fontify-expression ty))))))
@@ -254,8 +255,9 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
   (let ((package (dante-package-name))
         (help-xref-following nil)
         (origin (buffer-name)))
-    (dante-cps-let ((_load-message (dante-async-load-current-buffer t))
+    (dante-cps-let (((done _load-message) (dante-async-load-current-buffer t))
                     (info (dante-async-call (format ":i %s" ident))))
+      (funcall done)
       (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                        (called-interactively-p 'interactive))
       (save-excursion
@@ -276,23 +278,24 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 (defvar-local dante-loaded-interpreted nil)
 
 (defun dante-async-load-current-buffer (interpret cont)
-  "Load and maybe INTERPRET the temp file for buffer it and run CONT in a session."
+  "Load and maybe INTERPRET the temp file for buffer it and run CONT in a session.
+The continuation must call its first argument."
   (let ((fname (dante-local-name (dante-temp-file))))
     (dante-cps-let (((buffer done) (dante-start))
-              (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
-              (load-message
-               (dante-async-call
-                (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
-                    ":r" (concat ":l *" fname)))))
+                    (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
+                    (load-message
+                     (dante-async-call
+                      (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
+                          ":r" (concat ":l *" fname)))))
       (with-current-buffer buffer (setq dante-loaded-interpreted interpret))
-      (funcall cont load-message) ;; FIXME!!!
-      (funcall done))))
+      (funcall cont done load-message))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-state) 'dead)
       (run-with-timer 0 nil cont 'interrupted)
-    (dante-cps-let ((string (dante-async-load-current-buffer nil)))
+    (dante-cps-let (((done string) (dante-async-load-current-buffer nil)))
+      (funcall done)
       (let ((msgs (dante-parse-errors-warnings-splices
                    checker
                    (current-buffer)
@@ -412,8 +415,9 @@ See ``company-backends'' for the meaning of COMMAND and _ARGS."
        (unless (eq (dante-state) 'dead)
          (cons :async
                (lambda (ret)
-                 (dante-cps-let ((_load-messages (dante-async-load-current-buffer nil))
+                 (dante-cps-let (((done _load-messages) (dante-async-load-current-buffer nil))
                                  (reply (dante-async-call (format ":complete repl %S" prefix))))
+                   (funcall done)
                    (let* ((lines (s-lines reply))
                           (common (nth 2 (read (concat "(" (car lines) ")")))))
                      (funcall ret (--map (replace-regexp-in-string "\\\"" "" (concat common it)) (cdr lines))))))))))))
@@ -505,6 +509,7 @@ The path returned is canonicalized and stripped of any text properties."
       (make-temp-file "dante" nil suffix))))
 
 (defun dante-local-name (fname)
+  "Local name of FNAME on the remote host."
   (string-remove-prefix (or (file-remote-p fname) "") fname))
 
 (defun dante-temp-file-name (buffer)
@@ -890,15 +895,17 @@ a list is returned instead of failing with a nil result."
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (dante-cps-let ((ret (blocking-call))
-                  (_load-messages (dante-async-load-current-buffer nil))
+                  ((done _load-messages) (dante-async-load-current-buffer nil))
                   (target (dante-async-call (concat ":loc-at " symbol))))
+    (funcall done)
     (let ((xrefs (dante--make-xrefs target)))
       (funcall ret xrefs))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
   (dante-cps-let ((ret (blocking-call))
-                  (_load-messages (dante-async-load-current-buffer nil))
+                  ((done _load-messages) (dante-async-load-current-buffer nil))
                   (result (dante-async-call (concat ":uses " symbol))))
+    (funcall done)
     (let ((xrefs (dante--make-xrefs result)))
       (funcall ret xrefs))))
 
@@ -921,8 +928,7 @@ a list is returned instead of failing with a nil result."
     (when messages
       (let ((msg (car messages)))
         (save-excursion
-          (cond
-           ;; use (set-selective-display 12) to see an outline of all possible matches
+          (cond ;; use (set-selective-display 12) to see an outline of all possible matches
            ((string-match "Redundant constraints?: (?\\([^,)\n]*\\)" msg)
             (let ((constraint (match-string 1 msg)))
               (search-forward constraint) ; find type sig
@@ -1020,12 +1026,14 @@ a list is returned instead of failing with a nil result."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
 
-(defun dante-eval-loop (block-end)
+(defun dante-eval-loop (done block-end)
+  "Evaluation loop iteration.
+Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block."
   (while (and (looking-at "[ \t]*--")
               (not (looking-at "[ \t]*--[ \t]+>>>")))
     (forward-line))
   (if (not (search-forward-regexp "[ \t]*--[ \t]+>>>" (line-end-position) t 1))
-      (message "evaluation finished")
+      (funcall done)
     ;; found the next command; execute it and replace the result.
     (dante-cps-let ((res (dante-async-call (buffer-substring-no-properties (point) (line-end-position)))))
       (beginning-of-line)
@@ -1038,18 +1046,18 @@ a list is returned instead of failing with a nil result."
                            block-end)))
       (insert (apply 'concat (--map (concat "-- " it "\n") (--filter (not (s-blank? it)) (s-lines res)))))
       (beginning-of-line)
-      (dante-eval-loop block-end))))
+      (dante-eval-loop done block-end))))
 
 (defun dante-eval-block ()
-  "Evaluate the expression command found in >>> and insert the result."
+  "Evaluate the expression command(s) found after in the current command block >>> and insert the results."
   (interactive)
   (save-excursion
     (beginning-of-line)
     (let ((block-end (save-excursion (while (looking-at "[ \t]*--") (forward-line)) (point-marker))))
       (while (looking-at "[ \t]*--") (forward-line -1))
       (forward-line)
-      (dante-cps-let ((_load-messages (dante-async-load-current-buffer t)))
-        (dante-eval-loop block-end)))))
+      (dante-cps-let (((done _load-messages) (dante-async-load-current-buffer t)))
+        (dante-eval-loop done block-end)))))
 
 (provide 'dante)
 
