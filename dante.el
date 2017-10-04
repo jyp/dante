@@ -405,7 +405,7 @@ See ``company-backends'' for the meaning of COMMAND and _ARGS."
                          (import-end (match-end 0))
                          (import-start (match-beginning 0))
                          (is-import (eq import-end id-start)))
-                    (message "found %s end %s start %s id-start %s" import-found import-end import-start id-start)
+                    ;; (message "found %s end %s start %s id-start %s" import-found import-end import-start id-start)
                     (buffer-substring-no-properties (if is-import import-start id-start) (point)))))) ;; todo: pref len
     (cl-case command
       (interactive (company-begin-backend 'company-dante))
