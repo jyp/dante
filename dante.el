@@ -972,7 +972,7 @@ a list is returned instead of failing with a nil result."
               (search-forward (match-string 1 msg))
               (delete-region (match-beginning 0) (point))
               (insert replacement)))
-           ((string-match "Perhaps you want to add ‘\\(.*\\)’ to the import list in the import of[ \n\t]*‘.*’ ([^:]*:\\([0-9]*\\):[0-9]*-\\([0-9]*\\))" msg)
+           ((string-match "Perhaps you want to add ‘\\(.*\\)’ to the import list[\n\t ]+in the import of[ \n\t]*‘.*’[\n\t ]+([^:]*:\\([0-9]*\\):[0-9]*-\\([0-9]*\\))" msg)
             (let ((missing (match-string 1 msg))
                   (line (string-to-number (match-string 2 msg)))
                   (end-col (string-to-number (match-string 3 msg))))
