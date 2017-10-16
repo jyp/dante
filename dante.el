@@ -996,7 +996,7 @@ a list is returned instead of failing with a nil result."
                    (replacement (completing-read "replacement: " replacements)))
               (apply #'delete-region (dante-ident-pos-at-point))
               (insert replacement)))
-           ((string-match "Top-level binding with no type signature:[\n ]*" msg)
+           ((string-match "\\(Top-level binding\\|Pattern synonym\\) with no type signature:[\n ]*" msg)
             (beginning-of-line)
             (insert (concat (substring msg (match-end 0)) "\n")))
            ((string-match "Defined but not used" msg)
