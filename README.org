@@ -68,7 +68,7 @@ Any GHCi command can be put in such a block, but note however that:
    or set unexpected options. This work, or may mess with Dante internals
 
 So if your goal is run your webserver/database/etc. within GHCi, you
-should not do it through dante.
+should not do it using dante.
 
 ** Installation
 
