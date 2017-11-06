@@ -936,7 +936,7 @@ a list is returned instead of failing with a nil result."
                 (delete-region (point) (search-forward ",")))
               (when (looking-at "[ \t]*=>")
                 (delete-region (point) (search-forward "=>")))))
-           ((string-match "The type signature for ‘\\(.*\\)’ lacks an accompanying binding" msg)
+           ((string-match "The type signature for ‘\\(.*\\)’[ \t\n]*lacks an accompanying binding" msg)
             (beginning-of-line)
             (forward-line)
             (insert (concat (match-string 1 msg) " = _\n")))
