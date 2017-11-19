@@ -200,7 +200,7 @@ automatically. The user will have to manually run `dante-restart'
 to destroy the buffer and create a fresh one without this variable enabled.")
 
 (defun dante-get-var (symbol)
-  "Return the value of symbol in the GHCi process buffer."
+  "Return the value of SYMBOL in the GHCi process buffer."
   (let ((bp (dante-buffer-p)))
     (when bp (buffer-local-value symbol bp))))
 
@@ -587,7 +587,7 @@ x:\\foo\\bar (i.e., Windows)."
     (car result)))
 
 (defun dante-restart ()
-  "Restart the process with the same configuration as before."
+  "Restart GHCi with the same configuration as before."
   (interactive)
   (when (dante-buffer-p) (dante-destroy))
   (let ((fm-enabled flycheck-mode))
@@ -598,41 +598,36 @@ x:\\foo\\bar (i.e., Windows)."
 
 (defun dante-session (cont)
   "Run the CONT in a valid GHCi session for the current (source) buffer.
-CONT is called as (CONT process-buffer done).  CONT must call done
-when it is done sending commands. Only by calling done can other sub-sessions start running. This also ensures that "
+CONT is called as (CONT process-buffer done).  CONT must call
+done when it is done sending commands.  (Only by calling done can
+other sub-sessions start running.)"
   (let ((source-buffer (current-buffer))
-        (buffer (dante-get-buffer-create)))
-    (push (list :func cont :source-buffer source-buffer) dante-queue)
+        (buffer (or (dante-buffer-p) (dante-start))))
+    (with-current-buffer buffer (push (list :func cont :source-buffer source-buffer) dante-queue))
     ;; TODO: test process-live-p
-    (if (get-buffer-process buffer)
-        (dante-schedule-next buffer)
-      (dante-start-process-in-buffer buffer source-buffer))))
+    (dante-schedule-next buffer)))
 
-(defun dante-start-process-in-buffer (buffer source-buffer)
-  "Start a Dante worker in BUFFER for SOURCE-BUFFER."
-  (if (eq (buffer-local-value 'dante-state buffer) 'dead)
-      buffer
-    (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
-           (process (with-current-buffer buffer
-                      (when (memq 'command-line dante-debug)
-                        (message "GHCi command line: %s" (combine-and-quote-strings args)))
-                      (message "Dante: Starting GHCi ...")
-                      (apply #'start-file-process "dante" buffer args))))
+(defun dante-start ()
+  "Start a GHCi worker and return its buffer."
+  (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
+         (buffer (dante-buffer-create))
+         (process (with-current-buffer buffer
+                    (when (memq 'command-line dante-debug)
+                      (message "GHCi command line: %s" (combine-and-quote-strings args)))
+                    (message "Dante: Starting GHCi ...")
+                    (apply #'start-file-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (with-current-buffer buffer
         (erase-buffer)
-        (setq dante-callback nil) ;; todo: necessary?
         (setq-local dante-command-line (process-command process)))
-      (with-current-buffer source-buffer
-        (dante-set-state 'starting)
-        (dante-cps-let
-            ((_start-messages (dante-async-call
-                               (concat ":set -Wall\n" ;; TODO: configure
-                                       ":set +c\n" ;; collect type info
-                                       ":set prompt \"\\4%s|\""))))
-          (dante-set-state 'started)
-          (message "GHCi started!")
-          (dante-schedule-next buffer)))
+      (dante-set-state 'starting)
+      (dante-cps-let
+          ((_start-messages (dante-async-call
+                             (concat ":set -Wall\n" ;; TODO: configure
+                                     ":set +c\n" ;; collect type info
+                                     ":set prompt \"\\4%s|\""))))
+        (dante-set-state 'started)
+        (message "GHCi started!"))
       (set-process-filter
        process
        (lambda (process string)
@@ -645,7 +640,7 @@ when it is done sending commands. Only by calling done can other sub-sessions st
              (dante-report-ghci-progress)
              (dante-read-buffer)))))
       (set-process-sentinel process 'dante-sentinel)
-      buffer)))
+      buffer))
 
 (defun dante-report-ghci-progress ()
   "In the dante buffer, look for GHCi process and inform the user."
@@ -747,13 +742,14 @@ Text is ACC umulated.  CONT is called with all concatenated S-IN."
 (defun dante-schedule-next (buffer)
   "If GHCi is idle, run the next queued GHCi sub-session for BUFFER, if any.
 Note that sub-sessions are not interleaved."
-  (unless dante-callback
-    (let ((req (pop dante-queue)))
-      (force-mode-line-update)
-      (when req
-        (with-current-buffer (plist-get req :source-buffer)
-          (funcall (plist-get req :func) buffer
-                   (apply-partially #'dante-schedule-next buffer)))))))
+  (with-current-buffer buffer
+    (unless dante-callback
+      (let ((req (pop dante-queue)))
+        (force-mode-line-update)
+        (when req
+          (with-current-buffer (plist-get req :source-buffer)
+            (funcall (plist-get req :func) buffer
+                     (apply-partially #'dante-schedule-next buffer))))))))
 
 (defun dante--strip-carriage-returns (string)
   "Return the STRING stripped of its \\r occurences."
@@ -769,14 +765,13 @@ Note that sub-sessions are not interleaved."
          (package-name (dante-package-name)))
     (concat " dante:" package-name ":" dante-target ":" root)))
 
-(defun dante-get-buffer-create ()
-  "Get or create the buffer for GHCi."
-  (or (dante-buffer-p)
-      (let* ((root (dante-project-root)))
-        (with-current-buffer (get-buffer-create (dante-buffer-name))
-          (cd root)
-          (fundamental-mode) ;; note: this has several effects, including resetting the local variables
-          (current-buffer)))))
+(defun dante-buffer-create ()
+  "Create the buffer for GHCi."
+  (let* ((root (dante-project-root)))
+    (with-current-buffer (get-buffer-create (dante-buffer-name))
+      (cd root)
+      (fundamental-mode) ;; note: this has several effects, including resetting the local variables
+      (current-buffer))))
 
 (defun dante-set-state (state)
   "Set the dante-state to STATE and redisplay the modeline."
