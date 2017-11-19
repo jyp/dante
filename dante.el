@@ -665,9 +665,9 @@ The result is passed to CONT as (CONT REPLY).  Can only be called
 from a valid session."
   (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
   (let ((source-marker (point-marker)))
-  (with-current-buffer (dante-buffer-p)
-    (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n"))
-    (dante-async (apply-partially #'dante-wait-for-prompt source-marker cmd "" cont)))))
+    (with-current-buffer (dante-buffer-p)
+      (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n"))
+      (dante-async (apply-partially #'dante-wait-for-prompt source-marker cmd "" cont)))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -718,8 +718,10 @@ You can always run M-x dante-restart to make it try again.
     'face 'compilation-error)))
 
 (defun dante-wait-for-prompt (source-marker cmd acc cont s-in)
-  "Loop waiting for a GHCi prompt for SOURCE-MARKER after CMD.
-Text is ACC umulated.  CONT is called with all concatenated S-IN."
+  "Loop waiting for a GHCi prompt.
+Text from S-IN is ACC umulated.  CONT eventually is called with
+all concatenated text, after jumping back to SOURCE-MARKER. (CMD
+is remembered for debug.)"
   (let ((s (concat acc s-in)))
     (if (string-match "\4\\(.*\\)|" s)
         (progn
