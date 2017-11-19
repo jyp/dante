@@ -279,9 +279,9 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 
 (defun dante-async-load-current-buffer (interpret cont)
   "Load and maybe INTERPRET the temp file for current buffer and run CONT in a session.
-The continuation must call its first argument; see `dante-start'."
+The continuation must call its first argument; see `dante-session'."
   (let ((fname (dante-local-name (dante-temp-file))))
-    (dante-cps-let (((buffer done) (dante-start))
+    (dante-cps-let (((buffer done) (dante-session))
                     (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
                     (load-message
                      (dante-async-call
@@ -592,11 +592,11 @@ x:\\foo\\bar (i.e., Windows)."
   (when (dante-buffer-p) (dante-destroy))
   (let ((fm-enabled flycheck-mode))
     (flycheck-mode -1) ;; because flycheck gets confused when dante is restarted.
-    (dante-cps-let (((_buffer done) (dante-start)))
+    (dante-cps-let (((_buffer done) (dante-session)))
       (when fm-enabled (flycheck-mode 1))
       (funcall done))))
 
-(defun dante-start (cont) ;; TODO: rename to "dante-session"
+(defun dante-session (cont)
   "Run the CONT in a valid GHCi session for the current (source) buffer.
 CONT is called as (CONT process-buffer done).  CONT must call done
 when it is done sending commands. Only by calling done can other sub-sessions start running. This also ensures that "
