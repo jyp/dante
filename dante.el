@@ -571,7 +571,7 @@ x:\\foo\\bar (i.e., Windows)."
   "Stop GHCi and kill its associated process buffer."
   (interactive)
   (when (dante-buffer-p)
-    (set-dante-state 'deleting)
+    (dante-set-state 'deleting)
     (with-current-buffer (dante-buffer-p)
       (when (get-buffer-process (current-buffer))
         (kill-process (get-buffer-process (current-buffer)))
@@ -624,7 +624,7 @@ when it is done sending commands. Only by calling done can other sub-sessions st
         (setq dante-callback nil) ;; todo: necessary?
         (setq-local dante-command-line (process-command process)))
       (with-current-buffer source-buffer
-        (set-dante-state 'starting)
+        (dante-set-state 'starting)
         (dante-cps-let
             ((_start-messages (dante-async-call
                                (concat ":set -Wall\n" ;; TODO: configure
@@ -738,7 +738,7 @@ Text is ACC umulated.  CONT is called with all concatenated S-IN."
   "Process GHCi output."
   (let ((callback dante-callback)
         (string (dante--strip-carriage-returns (buffer-string))))
-    (unless dante-callback (error "Received output in %s (%s) but no callback" (current-buffer) string))
+    (unless dante-callback (error "Received output in %s (%s) but no callback is installed" (current-buffer) string))
     (delete-region (point-min) (point-max))
     (setq dante-callback nil)
     (funcall callback string)))
@@ -749,8 +749,8 @@ Note that sub-sessions are not interleaved."
   (unless dante-callback
     (let ((req (pop dante-queue)))
       (if (not req)
-          (set-dante-state 'ready)
-        (set-dante-state 'busy)
+          (dante-set-state 'ready)
+        (dante-set-state 'busy)
         (with-current-buffer (plist-get req :source-buffer)
           (funcall (plist-get req :func) buffer
                    (apply-partially #'dante-schedule-next buffer)))))))
@@ -778,7 +778,7 @@ Uses the directory of the current buffer for context."
       (cd root)
       (current-buffer))))
 
-(defun set-dante-state (state)
+(defun dante-set-state (state)
   "Set the dante-state to STATE and redisplay the modeline."
   (with-current-buffer (dante-buffer-p) (setq-local dante-state state))
   (force-mode-line-update))
