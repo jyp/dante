@@ -186,7 +186,7 @@ if the argument is omitted or nil or a positive integer).
 (define-key dante-mode-map (kbd "C-c \"") 'dante-eval-block)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Buffer-local variables/state
+;; Session-local variables. These are defined *IN THE GHCi INTERACTION BUFFER*
 
 (defvar-local dante-loaded-modules "" "Loaded modules as a string, reported by GHCi")
 (defvar-local dante-queue nil "List of ready GHCi queries.")
@@ -213,20 +213,15 @@ to destroy the buffer and create a fresh one without this variable enabled.")
   "List hidden process buffers created by dante.
 You can use this to kill them or look inside."
   (interactive)
-  (let ((buffers (cl-remove-if-not
-                  (lambda (buffer)
-                    (string-match " dante:" (buffer-name buffer)))
-                  (buffer-list))))
+  (let ((buffers
+         (--filter (string-match " dante:" (buffer-name it)) (buffer-list))))
     (if buffers
-        (display-buffer
-         (list-buffers-noselect
-          nil
-          buffers))
+        (display-buffer (list-buffers-noselect nil buffers))
       (error "There are no Dante process buffers"))))
 
 (defun dante-fontify-expression (expression)
   "Return a haskell-fontified version of EXPRESSION.
-If `haskell-mode' is loaded, just return EXPRESSION."
+If `haskell-mode' is not loaded, just return EXPRESSION."
   (if (fboundp 'haskell-mode)
       (with-temp-buffer
         (let ((haskell-mode-hook nil)) ;; to keep switching mode cheap
@@ -603,7 +598,6 @@ other sub-sessions start running.)"
   (let ((source-buffer (current-buffer))
         (buffer (or (dante-buffer-p) (dante-start))))
     (with-current-buffer buffer (push (list :func cont :source-buffer source-buffer) dante-queue))
-    ;; TODO: test process-live-p
     (dante-schedule-next buffer)))
 
 (defun dante-start ()
