@@ -585,18 +585,15 @@ x:\\foo\\bar (i.e., Windows)."
   (let ((result nil))
     (funcall cont (lambda (reply) (setq result (list reply))))
     ;; use a list so that even 'nil' will be detected as a result.
-    (while (not result) (sleep-for 0.001))
+    (while (not result) (sleep-for 0.01))
     (car result)))
 
 (defun dante-restart ()
   "Restart GHCi with the same configuration as before."
   (interactive)
-  (when (dante-buffer-p) (dante-destroy))
-  (let ((fm-enabled flycheck-mode))
-    (flycheck-mode -1) ;; because flycheck gets confused when dante is restarted.
-    (dante-cps-let (((_buffer done) (dante-session)))
-      (when fm-enabled (flycheck-mode 1))
-      (funcall done))))
+  (when (dante-buffer-p)
+    (dante-destroy)
+    (dante-cps-let (((_buffer done) (dante-session))) (funcall done))))
 
 (defun dante-session (cont)
   "Run the CONT in a valid GHCi session for the current (source) buffer.
