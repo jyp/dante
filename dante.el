@@ -79,11 +79,12 @@ expands to: (fun1 arg1 (λ (x) (fun2 arg2 (λ (x y) body))))."
 (defcustom dante-repl-command-line nil
   "Command line to start GHCi, as a list: the executable and its arguments.
 When nil, dante will guess the value depending on
-`dante-project-root' contents.  Customize as a file or directory
-variable.  Each element of the list is evaluated before being
-passed to the shell."
+`dante-project-root' contents.  This should usually be customized
+as a file or directory variable.  Each element of the list is a
+sexp which is evaluated to a string before being passed to the
+shell."
   :group 'dante
-  :type '(repeat string))
+  :type '(repeat sexp))
 
 (defcustom dante-project-root nil
   "The project root, as a string or nil.
@@ -138,8 +139,9 @@ variable."
 
 (defun dante-repl-command-line ()
   "Return the command line for running GHCi.
-If `dante-repl-command-line' is non-nil, it will be returned.
-Otherwise, use `dante-repl-command-line-methods-alist'."
+If the custom variable `dante-repl-command-line' is non-nil, it
+will be returned.  Otherwise, use
+`dante-repl-command-line-methods-alist'."
   (or dante-repl-command-line
       (let ((root (dante-project-root)))
             (--first it (--map (funcall (cdr it) root)
