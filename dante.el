@@ -998,7 +998,7 @@ a list is returned instead of failing with a nil result."
            ((string-match "Found type wildcard ‘.*’[ \t\n]*standing for ‘\\(.*\\)’" msg)
             (let ((type-expr (match-string 1 msg)))
             (apply #'delete-region (dante-ident-pos-at-point))
-            (insert type-expr)))
+            (insert (concat "(" type-expr ")"))))
            ((--any? (string-match it msg) dante-suggestible-extensions)
             (goto-char 1)
             (insert (concat "{-# LANGUAGE " (car (--filter (string-match it msg) dante-suggestible-extensions)) " #-}\n")))
