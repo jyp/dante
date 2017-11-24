@@ -620,7 +620,8 @@ other sub-sessions start running.)"
                                      ":set +c\n" ;; collect type info
                                      ":set prompt \"\\4%s|\""))))
         (dante-set-state 'started)
-        (message "GHCi started!"))
+        (message "GHCi started!")
+        (dante-schedule-next buffer))
       (set-process-filter
        process
        (lambda (process string)
