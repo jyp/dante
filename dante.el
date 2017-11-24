@@ -154,7 +154,7 @@ will be returned.  Otherwise, use
 (defun dante-status ()
   "Return dante's status for the current source buffer."
   (pcase (dante-get-var 'dante-state)
-    ('started (if (dante-get-var 'dante-callback) (format "busy(%s)" (1+ (length (dante-get-var 'dante-queue))))
+    ('running (if (dante-get-var 'dante-callback) (format "busy(%s)" (1+ (length (dante-get-var 'dante-queue))))
                 (dante-get-var 'dante-loaded-modules)))
     (state (symbol-name state))))
 
@@ -195,7 +195,7 @@ if the argument is omitted or nil or a positive integer).
 (defvar-local dante-state nil
   "nil: initial state
 - starting: GHCi starting
-- started: GHCi started
+- running: GHCi running
 - deleting: The process of the buffer is being deleted.
 - dead: GHCi died on its own. Do not try restarting
 automatically. The user will have to manually run `dante-restart'
@@ -617,8 +617,8 @@ other sub-sessions start running.)"
                              (concat ":set -Wall\n" ;; TODO: configure
                                      ":set +c\n" ;; collect type info
                                      ":set prompt \"\\4%s|\""))))
-        (dante-set-state 'started)
-        (message "GHCi started!")
+        (dante-set-state 'running)
+        (message "GHCi running!")
         (dante-schedule-next buffer))
       (set-process-filter
        process
