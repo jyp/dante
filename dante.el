@@ -299,9 +299,7 @@ The continuation must call its first argument; see `dante-session'."
                    string)))
         (funcall cont
                  'finished
-                 (cl-remove-if (lambda (msg)
-                                 (eq 'splice (flycheck-error-level msg)))
-                               msgs))))))
+                 (--remove (eq 'splice (flycheck-error-level it)) msgs))))))
 
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
@@ -741,11 +739,11 @@ Note that sub-sessions are not interleaved."
   (with-current-buffer buffer
     (unless dante-callback
       (let ((req (pop dante-queue)))
-        (force-mode-line-update)
         (when req
           (with-current-buffer (plist-get req :source-buffer)
             (funcall (plist-get req :func) buffer
-                     (apply-partially #'dante-schedule-next buffer))))))))
+                     (apply-partially #'dante-schedule-next buffer)))))))
+  (force-mode-line-update))
 
 (defun dante--strip-carriage-returns (string)
   "Return the STRING stripped of its \\r occurences."
