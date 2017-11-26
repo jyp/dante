@@ -272,19 +272,19 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 ;; Flycheck checker
 
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
-(defvar-local dante-loaded-interpreted nil)
 
 (defun dante-async-load-current-buffer (interpret cont)
   "Load and maybe INTERPRET the temp file for current buffer and run CONT in a session.
 The continuation must call its first argument; see `dante-session'."
+;; Note that the GHCi doc appears to be wrong. TEST before changing this code.
   (let ((fname (dante-local-name (dante-temp-file))))
     (dante-cps-let (((buffer done) (dante-session))
                     (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
                     (load-message
                      (dante-async-call
                       (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
-                          ":r" (concat ":l *" fname)))))
-      (with-current-buffer buffer (setq dante-loaded-interpreted interpret))
+                          ":r" (concat ":l " fname)))))
+      (with-current-buffer buffer (setq dante-loaded-file fname))
       (funcall cont done load-message))))
 
 (defun dante-check (checker cont)
