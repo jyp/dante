@@ -320,21 +320,20 @@ Add `haskell-dante' to `flycheck-checkers'."
 CHECKER and BUFFER are added to each item parsed from STRING."
   (let ((messages (list))
         (temp-file (dante-local-name (dante-temp-file-name buffer))))
-    (while (string-match
-            (concat "[\n]\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\):"
-                    "[ \n]+\\([[:unibyte:][:nonascii:]]+?\\)\n[^ ]")
-            string)
+    (while (and
+            (not (string-prefix-p "\nOk, modules loaded:" string)) ;; after that GHC may repeat already output messages.
+            (string-match
+             "[\n]\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\n\\([ ]+.*\n\\)*\\)"
+             string))
       (let* ((file (dante-canonicalize-path (match-string 1 string)))
              (location-raw (match-string 2 string))
-             (msg (match-string 3 string)) ;; Replace gross bullet points.
-             (s (substring string (1+ (match-end 0))))
-             (type (cond ((string-match "^Warning:" msg)
-                          (setq msg (replace-regexp-in-string "^Warning: *" "" msg))
-                          (if (string-match "^\\[-Wdeferred-type-errors\\]" msg)
-                              'error
-                            'warning))
-                         ((string-match "^Splicing " msg) 'splice)
-                         (t                               'error)))
+             (msg (s-trim (match-string 3 string)))
+             (s (substring string (1- (match-end 0))))
+             (type (cond
+                    ((string-match-p "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" msg) 'error)
+                    ((string-match-p "^warning:" msg) 'warning)
+                    ((string-match-p "^splicing " msg) 'splice)
+                    (t 'error)))
              (location (dante-parse-error
                         (concat file ":" location-raw ": x")))
              (line (plist-get location :line))
