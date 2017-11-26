@@ -597,6 +597,8 @@ other sub-sessions start running.)"
     (with-current-buffer buffer (push (list :func cont :source-buffer source-buffer) dante-queue))
     (dante-schedule-next buffer)))
 
+(defcustom dante-load-flags '("-Wall" "+c")
+"Flags to set whenever GHCi is started. Consider also: -fdefer-type-errors -fdefer-typed-holes" :type '(repeat string))
 (defun dante-start ()
   "Start a GHCi worker and return its buffer."
   (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
@@ -612,13 +614,11 @@ other sub-sessions start running.)"
         (setq-local dante-command-line (process-command process)))
       (dante-set-state 'starting)
       (dante-cps-let
-          ((_start-messages (dante-async-call
-                             (concat ":set -Wall\n" ;; TODO: configure
-                                     ":set +c\n" ;; collect type info
-                                     ":set prompt \"\\4%s|\""))))
+          ((_start-messages
+            (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
         (dante-set-state 'running)
-        (message "GHCi running!")
-        (dante-schedule-next buffer))
+        (dante-schedule-next buffer) ;; make sure that the desired continuation is run
+        (message "GHCi running!"))
       (set-process-filter
        process
        (lambda (process string)
