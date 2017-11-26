@@ -893,6 +893,22 @@ a list is returned instead of failing with a nil result."
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Idle-hook draft
+
+;; (setq dante-timer (run-with-idle-timer 2 t #'dante-idle-function))
+;; (defun dante-idle-function ()
+;;   (when dante-mode
+;;     (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
+;;       (unless (or (nth 4 (syntax-ppss)) (s-blank? tap))
+;;         (setq-local dante-idle-point (point))
+;;         (dante-cps-let (((done _load-messages) (dante-async-load-current-buffer t))
+;;                         (ty (dante-async-call (concat ":type-at " tap))))
+;;           (when (eq (point) dante-idle-point)
+;;             (message "%s" (s-collapse-whitespace (dante-fontify-expression ty))))
+;;           (funcall done))))))
+;; (cancel-timer dante-timer)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Auto-fix
 
 (defcustom dante-suggestible-extensions
