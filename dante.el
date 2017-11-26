@@ -321,7 +321,7 @@ CHECKER and BUFFER are added to each item parsed from STRING."
   (let ((messages (list))
         (temp-file (dante-local-name (dante-temp-file-name buffer))))
     (while (and
-            (not (string-prefix-p "Ok, modules loaded:" string)) ;; after that GHC may repeat already output messages.
+            (not (string-prefix-p "\nOk, modules loaded:" string)) ;; after that GHC may repeat already output messages.
             (string-match
              "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)"
              string))
