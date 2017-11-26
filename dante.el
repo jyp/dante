@@ -321,14 +321,14 @@ CHECKER and BUFFER are added to each item parsed from STRING."
   (let ((messages (list))
         (temp-file (dante-local-name (dante-temp-file-name buffer))))
     (while (and
-            (not (string-prefix-p "\nOk, modules loaded:" string)) ;; after that GHC may repeat already output messages.
+            (not (string-prefix-p "Ok, modules loaded:" string)) ;; after that GHC may repeat already output messages.
             (string-match
-             "[\n]\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\n\\([ ]+.*\n\\)*\\)"
+             "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)"
              string))
       (let* ((file (dante-canonicalize-path (match-string 1 string)))
              (location-raw (match-string 2 string))
              (msg (s-trim (match-string 3 string)))
-             (s (substring string (1- (match-end 0))))
+             (s (substring string (match-end 0)))
              (type (cond
                     ((string-match-p "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" msg) 'error)
                     ((string-match-p "^warning:" msg) 'warning)
