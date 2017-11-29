@@ -13,7 +13,7 @@ comparison).
 
 | Feature                                 | Command               | Keybinding |
 |-----------------------------------------+-----------------------+------------|
-| Remote operation over ssh               |                       |            |
+| Remote operation over ssh, via tramp    | N/A                   | N/A        |
 | Flycheck type checking                  | flycheck-mode         |            |
 | Company completion                      | company-mode          |            |
 | Type of selection                       | dante-type-at         | C-c .      |
