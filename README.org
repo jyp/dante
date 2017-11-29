@@ -62,7 +62,7 @@ Any GHCi command can be put in such a block, but note however that:
 
 1. There is no guarantee that a state will be maintained across
    several calls to ~dante-eval-block~. In fact, Dante liberally calls
-   :r and :l and (re)sets various GHCi options.
+   ~:r~ and ~:l~ and (re)sets various GHCi options.
 
 2. It is not supported to load and/or unload modules in such blocks,
    or set unexpected options. This work, or may mess with Dante internals
