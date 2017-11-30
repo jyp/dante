@@ -307,14 +307,6 @@ process."
   :start 'dante-check
   :modes '(haskell-mode literate-haskell-mode))
 
-;;;###autoload
-(defun flycheck-dante-setup ()
-  "Setup Flycheck Dante.
-
-Add `haskell-dante' to `flycheck-checkers'."
-  (interactive)
-  (add-to-list 'flycheck-checkers 'haskell-dante))
-
 (defun dante-parse-errors-warnings-splices (checker buffer string)
   "Parse flycheck errors and warnings.
 CHECKER and BUFFER are added to each item parsed from STRING."
