@@ -272,12 +272,18 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 ;; Flycheck checker
 
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
+(defvar-local dante-load-message nil "load messages")
 
 (defun dante-async-load-current-buffer (interpret cont)
   "Load and maybe INTERPRET the temp file for current buffer and run CONT in a session.
 The continuation must call its first argument; see `dante-session'."
 ;; Note that the GHCi doc for :l and :r appears to be wrong. TEST before changing this code.
-  (let ((fname (dante-local-name (dante-temp-file))))
+  (let* ((epoch (buffer-modified-tick))
+         (unchanged (equal epoch dante-temp-epoch))
+         (fname (dante-temp-file-name (current-buffer))))
+    (unless unchanged ; so GHCi's :r may be a no-op; save some time if remote
+      (setq dante-temp-epoch epoch)
+      (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0))
     (dante-cps-let (((buffer done) (dante-session))
                     (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
                     (load-message
@@ -285,7 +291,10 @@ The continuation must call its first argument; see `dante-session'."
                       (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
                           ":r" (concat ":l " fname)))))
       (with-current-buffer buffer (setq dante-loaded-file fname))
-      (funcall cont done load-message))))
+      ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
+      (funcall cont done (if (and unchanged (string-match "OK, modules loaded: \\(.*\\)\\.$" load-message))
+                             dante-load-message
+                           (setq dante-load-message load-message))))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
@@ -293,10 +302,7 @@ The continuation must call its first argument; see `dante-session'."
       (run-with-timer 0 nil cont 'interrupted)
     (dante-cps-let (((done string) (dante-async-load-current-buffer nil)))
       (funcall done)
-      (let ((msgs (dante-parse-errors-warnings-splices
-                   checker
-                   (current-buffer)
-                   string)))
+      (let ((msgs (dante-parse-errors-warnings-splices checker (current-buffer) string)))
         (funcall cont
                  'finished
                  (--remove (eq 'splice (flycheck-error-level it)) msgs))))))
@@ -479,15 +485,6 @@ The path returned is canonicalized and stripped of any text properties."
 (defvar-local dante-temp-epoch -1
   "The value of `buffer-modified-tick' when the contents were
   last written to `dante-temp-file-name'.")
-
-(defun dante-temp-file (&optional buffer)
-  "Create a temp file with an up-to-date copy of BUFFER's contents and return its name."
-  (with-current-buffer (or buffer (current-buffer))
-    (let ((epoch (buffer-modified-tick)))
-      (unless (equal epoch dante-temp-epoch) ;; so ghci's :r may be noop
-        (setq dante-temp-epoch epoch)
-        (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0)))
-    (dante-temp-file-name (current-buffer))))
 
 (defun dante-canonicalize-path (path)
   "Return a standardized version of PATH.
