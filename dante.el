@@ -559,7 +559,7 @@ other sub-sessions start running.)"
     (with-current-buffer buffer (push (list :func cont :source-buffer source-buffer) dante-queue))
     (dante-schedule-next buffer)))
 
-(defcustom dante-load-flags '("-Wall" "+c")
+(defcustom dante-load-flags '("-Wall" "+c" "-fno-diagnostics-show-caret")
 "Flags to set whenever GHCi is started. Consider also: -fdefer-type-errors -fdefer-typed-holes" :type '(repeat string))
 (defun dante-start ()
   "Start a GHCi worker and return its buffer."
