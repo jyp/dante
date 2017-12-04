@@ -302,10 +302,10 @@ The continuation must call its first argument; see `dante-session'."
       (run-with-timer 0 nil cont 'interrupted)
     (dante-cps-let (((done string) (dante-async-load-current-buffer nil)))
       (funcall done)
-      (let ((msgs (dante-parse-errors-warnings-splices checker (current-buffer) string)))
-        (funcall cont
-                 'finished
-                 (--remove (eq 'splice (flycheck-error-level it)) msgs))))))
+      (funcall cont
+               'finished
+               (--remove (eq 'splice (flycheck-error-level it))
+                         (dante-parse-errors-warnings-splices checker (current-buffer) string))))))
 
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
