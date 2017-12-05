@@ -559,8 +559,15 @@ other sub-sessions start running.)"
     (with-current-buffer buffer (push (list :func cont :source-buffer source-buffer) dante-queue))
     (dante-schedule-next buffer)))
 
-(defcustom dante-load-flags '("-Wall" "+c" "-fno-diagnostics-show-caret")
-"Flags to set whenever GHCi is started. Consider also: -fdefer-type-errors -fdefer-typed-holes" :type '(repeat string))
+(defcustom dante-load-flags '("+c" "-fno-diagnostics-show-caret")
+  "Flags to set whenever GHCi is started."
+  :type (cons 'set (--map (list 'const :tag (concat (car it) ": " (cadr it)) (car it))
+                          '(("+c" "Gather type information (necessary for `dante-type-at')")
+                            ("-Wall" "Report all warnings")
+                            ("-fdefer-type-holes" "Accept typed holes, so that completion/type-at continues to work then.")
+                            ("-fdefer-type-errors" "Accept incorrectly typed programs, so that completion/type-at continues to work then. (However errors in dependencies won't be detected as such)")
+                            ("-fno-diagnostics-show-caret" "Cleaner error messages for GHC >=8.2 (ignored by earlier versions)")))))
+
 (defun dante-start ()
   "Start a GHCi worker and return its buffer."
   (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
