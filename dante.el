@@ -655,25 +655,25 @@ This is a standard process sentinel function."
   (insert "\n---\n\n")
   (insert
    (propertize
-    (concat "This is where GHCi output is bufferized. This buffer is normally hidden,
-but a problem occcured.
+    (concat "This is where GHCi output is bufferized. This buffer
+is normally hidden, but the GHCi process ended.
 
 EXTRA TROUBLESHOOTING INFO
 
-The GHCi process ended. Here is the reason that Emacs gives us: " change "
+Process state change: " change "
 " (dante-debug-info (current-buffer)) "
 
 WHAT TO DO NEXT
 
-Try to customize (probably file-locally or directory-locally)
+Verify that the GHCi REPL can be loaded manually, then try to
+customize (probably file-locally or directory-locally)
 `dante-project-root' and/or `dante-repl-command-line'.  If you
 fixed the problem, just kill this buffer, Dante will make a fresh
 one and attempt to restart GHCi automatically.
 
 If you are unable to fix the problem, just leave this buffer
 around and Dante will not attempt to restart GHCi.
-
-You can always run M-x dante-restart to make it try again.
+You can always run `dante-restart' to make it try again.
 ")
     'face 'compilation-error)))
 
