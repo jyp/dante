@@ -135,7 +135,7 @@ configuration for your project, customize
 variable."
   :type '(alist :key-type symbol :value-type function))
 
-(defvar dante-command-line)
+(defvar dante-command-line "command line used to start GHCi")
 
 (defun dante-repl-command-line ()
   "Return the command line for running GHCi.
@@ -144,8 +144,8 @@ will be returned.  Otherwise, use
 `dante-repl-command-line-methods-alist'."
   (or dante-repl-command-line
       (let ((root (dante-project-root)))
-            (--first it (--map (funcall (cdr it) root)
-                               dante-repl-command-line-methods-alist)))))
+        (--first it (--map (funcall (cdr it) root)
+                           dante-repl-command-line-methods-alist)))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
 
@@ -298,8 +298,7 @@ The continuation must call its first argument; see `dante-session'."
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
-  (if (eq (dante-get-var 'dante-state) 'dead)
-      (run-with-timer 0 nil cont 'interrupted)
+  (if (eq (dante-get-var 'dante-state) 'dead) (cont 'interrupted)
     (dante-cps-let (((done string) (dante-async-load-current-buffer nil)))
       (funcall done)
       (funcall cont
@@ -370,7 +369,6 @@ See ``company-backends'' for the meaning of COMMAND and _ARGS."
                          (import-end (match-end 0))
                          (import-start (match-beginning 0))
                          (is-import (eq import-end id-start)))
-                    ;; (message "found %s end %s start %s id-start %s" import-found import-end import-start id-start)
                     (buffer-substring-no-properties (if is-import import-start id-start) (point)))))) ;; todo: pref len
     (cl-case command
       (interactive (company-begin-backend 'dante-company))
