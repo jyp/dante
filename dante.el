@@ -289,7 +289,7 @@ The continuation must call its first argument; see `dante-session'."
                     (load-message
                      (dante-async-call
                       (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
-                          ":r" (concat ":l " fname)))))
+                          ":r" (concat ":l " (dante-local-name fname))))))
       (with-current-buffer buffer (setq dante-loaded-file fname))
       ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
       (funcall cont done (if (and unchanged (string-match "OK, modules loaded: \\(.*\\)\\.$" load-message))
