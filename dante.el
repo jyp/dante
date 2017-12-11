@@ -298,7 +298,7 @@ The continuation must call its first argument; see `dante-session'."
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
-  (if (eq (dante-get-var 'dante-state) 'dead) (cont 'interrupted)
+  (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
     (dante-cps-let (((done string) (dante-async-load-current-buffer nil)))
       (funcall done)
       (funcall cont
