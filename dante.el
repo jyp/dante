@@ -860,20 +860,22 @@ a list is returned instead of failing with a nil result."
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Idle-hook draft
+;; Idle-hook (missing bit: check for errors)
 
-;; (setq dante-timer (run-with-idle-timer 2 t #'dante-idle-function))
+;; (defvar dante-timer nil)
 ;; (defun dante-idle-function ()
-;;   (when dante-mode
+;;   (when (bound-and-true-p dante-mode)
 ;;     (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
-;;       (unless (or (nth 4 (syntax-ppss)) (s-blank? tap))
+;;       (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap))
 ;;         (setq-local dante-idle-point (point))
 ;;         (dante-cps-let (((done _load-messages) (dante-async-load-current-buffer t))
 ;;                         (ty (dante-async-call (concat ":type-at " tap))))
 ;;           (when (eq (point) dante-idle-point)
-;;             (message "%s" (s-collapse-whitespace (dante-fontify-expression ty))))
+;;             (unless (current-message)
+;;               (message "%s" (s-collapse-whitespace (dante-fontify-expression ty)))))
 ;;           (funcall done))))))
-;; (cancel-timer dante-timer)
+;; (when dante-timer (cancel-timer dante-timer))
+;; (setq dante-timer (run-with-idle-timer 1 t #'dante-idle-function))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Auto-fix
