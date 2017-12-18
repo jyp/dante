@@ -186,8 +186,9 @@ if the argument is omitted or nil or a positive integer).
 (define-key dante-mode-map (kbd "C-c \"") 'dante-eval-block)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Session-local variables. These are defined *IN THE GHCi INTERACTION BUFFER*
+;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
+(defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 (defvar-local dante-loaded-modules "" "Loaded modules as a string, reported by GHCi")
 (defvar-local dante-queue nil "List of ready GHCi queries.")
 (defvar-local dante-callback nil "Callback waiting for output.")
@@ -271,7 +272,6 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck checker
 
-(defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 (defvar-local dante-load-message nil "load messages")
 
 (defun dante-async-load-current-buffer (interpret cont)
