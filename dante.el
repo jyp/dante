@@ -188,6 +188,7 @@ if the argument is omitted or nil or a positive integer).
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
+(defvar-local dante-load-message nil "load messages")
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 (defvar-local dante-loaded-modules "" "Loaded modules as a string, reported by GHCi")
 (defvar-local dante-queue nil "List of ready GHCi queries.")
@@ -272,7 +273,6 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck checker
 
-(defvar-local dante-load-message nil "load messages")
 
 (defun dante-async-load-current-buffer (interpret cont)
   "Load and maybe INTERPRET the temp file for current buffer and run CONT in a session.
@@ -290,11 +290,13 @@ The continuation must call its first argument; see `dante-session'."
                      (dante-async-call
                       (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
                           ":r" (concat ":l " (dante-local-name fname))))))
-      (with-current-buffer buffer (setq dante-loaded-file fname))
-      ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
-      (funcall cont done (if (and unchanged (string-match "OK, modules loaded: \\(.*\\)\\.$" load-message))
-                             dante-load-message
-                           (setq dante-load-message load-message))))))
+      (let ((load-msg (with-current-buffer buffer
+                        (setq dante-loaded-file fname)
+                        (if (and unchanged (string-match "OK, modules loaded: \\(.*\\)\\.$" load-message))
+                            dante-load-message
+                          (setq dante-load-message load-message)))))
+        ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
+        (funcall cont done load-msg)))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
@@ -637,13 +639,21 @@ This is a standard process sentinel function."
         (with-current-buffer buffer (setq dante-state 'dead))
         (dante-show-process-problem process change)))))
 
+(defun dante-diagnose ()
+  (interactive)
+  "Show all state info in a help buffer."
+  (let ((info (dante-debug-info (dante-buffer-p))))
+    (with-help-window (help-buffer)
+      (with-current-buffer (help-buffer)
+        (insert info)))))
+
 (defun dante-debug-info (buffer)
   "Show debug info for dante buffer BUFFER."
   (if buffer
       (with-current-buffer buffer
-        (format "Directory:%s\n Command line:%s\n Loaded: %s\n State: %s\n Queue: %s\n Callback: %s\n"
-                default-directory dante-command-line dante-loaded-modules dante-state dante-queue dante-callback))
-    (format "Dante not started in %s" buffer)))
+        (s-join "\n" (--map (format "%s %s" it (eval it))
+                            '(default-directory dante-command-line dante-loaded-modules dante-state dante-queue dante-callback dante-load-message))))
+    (format "No GHCi interaction buffer")))
 
 (defun dante-show-process-problem (process change)
   "Report to the user that PROCESS reported CHANGE, causing it to end."
