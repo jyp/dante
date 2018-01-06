@@ -13,7 +13,6 @@ comparison).
 
 | Feature                                 | Command               | Keybinding |
 |-----------------------------------------+-----------------------+------------|
-| Remote operation over ssh, via tramp    | N/A                   | N/A        |
 | Flycheck type checking                  | flycheck-mode         |            |
 | Company completion                      | company-mode          |            |
 | Type of selection                       | dante-type-at         | C-c .      |
@@ -23,6 +22,8 @@ comparison).
 | Find uses                               | xref-find-references  | M-?        |
 | REPLoid (*)                             | dante-eval-block      | C-c "      |
 | Restart                                 | dante-restart         |            |
+| Diagnosis                               | dante-diagnose        |            |
+| Remote operation over ssh, via tramp    | N/A                   | N/A        |
 
 
 (*) REPLoid explanation:
@@ -33,10 +34,12 @@ You can evaluate code by writing it in a comment of the form
 Example:
 
 #+BEGIN_SRC Haskell
+
 example :: [String]
 example = ["This is an example", "of", "interactive", "evaluation"]
 
 -- >>> intercalate " " example
+
 #+END_SRC
 In the above file, if you invoke ~dante-eval-block~ on the line
 containing "intercalate", you'll get:
@@ -60,12 +63,13 @@ can have local let statements.
 
 Any GHCi command can be put in such a block, but note however that:
 
-1. There is no guarantee that a state will be maintained across
-   several calls to ~dante-eval-block~. In fact, Dante liberally calls
-   ~:r~ and ~:l~ and (re)sets various GHCi options.
+1. There is no guarantee that state will be maintained across several
+   calls to ~dante-eval-block~. In fact, Dante liberally calls ~:r~
+   and ~:l~, and (re)sets various GHCi options.
 
 2. It is not supported to load and/or unload modules in such blocks,
-   or set unexpected options. This work, or may mess with Dante internals
+   or set unexpected options. This may work, or may mess with Dante
+   internals.
 
 So if your goal is run your webserver/database/etc. within GHCi, you
 should not do it using dante.
