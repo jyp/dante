@@ -57,7 +57,7 @@ So (dante-cps-bind x (fun arg) body) expands to (fun arg (λ (x) body))"
 (defmacro dante-cps-let (bindings &rest body)
 "Expand multiple BINDINGS and call BODY as a continuation.
 Example: (dante-cps-let ((x (fun1 arg1)) (y z (fun2 arg2))) body)
-expands to: (fun1 arg1 (λ (x) (fun2 arg2 (λ (x y) body))))."
+expands to: (fun1 arg1 (λ (x) (fun2 arg2 (λ (y z) body))))."
   (declare (indent 1))
   (pcase bindings
     (`((,vars ,expr)) `(dante-cps-bind ,vars ,expr ,@body))
@@ -626,12 +626,12 @@ from a valid session."
   (let ((source-marker (point-marker)))
     (with-current-buffer (dante-buffer-p)
       (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n"))
-      (dante-async (dante-cps-let ((s (apply-partially #'dante-wait-for-prompt "")))
-                     (setq dante-loaded-modules (match-string 1 s))
-                     (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
-                       (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
-                       (with-current-buffer (marker-buffer source-marker)
-                         (save-excursion (goto-char source-marker) (funcall cont string)))))))))
+      (dante-cps-let ((s (dante-wait-for-prompt "")))
+        (setq dante-loaded-modules (match-string 1 s))
+        (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
+          (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
+          (with-current-buffer (marker-buffer source-marker)
+            (save-excursion (goto-char source-marker) (funcall cont string))))))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -689,14 +689,13 @@ You can always run `dante-restart' to make it try again.
 ")
     'face 'compilation-error)))
 
-(defun dante-wait-for-prompt (acc cont s-in)
+(defun dante-wait-for-prompt (acc cont)
   "Wait for a GHCi prompt.
-Text from S-IN is ACC umulated.  CONT eventually is called with
-all concatenated text."
-  (let ((s (concat acc s-in)))
-    (if (string-match "\4\\(.*\\)|" s) (funcall cont s)
-      (dante-async (apply-partially #'dante-wait-for-prompt s cont)))))
-
+Input text is ACC umulated.  CONT eventually is called with all
+concatenated text."
+  (if (string-match "\4\\(.*\\)|" acc) (funcall cont acc)
+    (dante-cps-let ((input (dante-async)))
+      (dante-wait-for-prompt (concat acc input) cont))))
 
 (defun dante-read-buffer ()
   "Process GHCi output."
