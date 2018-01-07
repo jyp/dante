@@ -1,6 +1,5 @@
 ;;; dante.el --- Development mode for Haskell -*- lexical-binding: t -*-
 
-
 ;; Copyright (c) 2016 Jean-Philippe Bernardy
 ;; Copyright (c) 2016 Chris Done
 ;; Copyright (c) 2015 Athur Fayzrakhmanov
@@ -627,7 +626,12 @@ from a valid session."
   (let ((source-marker (point-marker)))
     (with-current-buffer (dante-buffer-p)
       (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n"))
-      (dante-async (apply-partially #'dante-wait-for-prompt source-marker cmd "" cont)))))
+      (dante-async (dante-cps-let ((s (apply-partially #'dante-wait-for-prompt "")))
+                     (setq dante-loaded-modules (match-string 1 s))
+                     (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
+                       (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
+                       (with-current-buffer (marker-buffer source-marker)
+                         (save-excursion (goto-char source-marker) (funcall cont string)))))))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -685,19 +689,13 @@ You can always run `dante-restart' to make it try again.
 ")
     'face 'compilation-error)))
 
-(defun dante-wait-for-prompt (source-marker cmd acc cont s-in)
-  "Loop waiting for a GHCi prompt.
+(defun dante-wait-for-prompt (acc cont s-in)
+  "Wait for a GHCi prompt.
 Text from S-IN is ACC umulated.  CONT eventually is called with
-all concatenated text, after jumping back to SOURCE-MARKER. (CMD
-is remembered for debug.)"
+all concatenated text."
   (let ((s (concat acc s-in)))
-    (if (string-match "\4\\(.*\\)|" s)
-        (progn
-          (setq dante-loaded-modules (match-string 1 s))
-          (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
-            (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
-            (with-current-buffer (marker-buffer source-marker) (save-excursion (goto-char source-marker) (funcall cont string)))))
-      (dante-async (apply-partially #'dante-wait-for-prompt source-marker cmd s cont)))))
+    (if (string-match "\4\\(.*\\)|" s) (funcall cont s)
+      (dante-async (apply-partially #'dante-wait-for-prompt s cont)))))
 
 
 (defun dante-read-buffer ()
