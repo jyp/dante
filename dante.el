@@ -596,20 +596,11 @@ other sub-sessions start running.)"
            (with-current-buffer (process-buffer process)
              (goto-char (point-max))
              (insert string)
-             (dante-report-ghci-progress)
              (dante-read-buffer)))))
       (set-process-sentinel process 'dante-sentinel)
       buffer))
 
-(defun dante-report-ghci-progress ()
-  "In the dante buffer, look for GHCi progress and inform the user."
-  (goto-char (point-max))
-  (when (search-backward "\n" nil t 2)
-    (forward-char)
-    (let ((message
-          (cond ((search-forward-regexp "\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\)" nil t)
-                 (format "%s/%s(%s)" (match-string 1) (match-string 2) (match-string 3))))))
-    (when message (message "GHCi: %s" message)))))
+
 
 (defun dante-async-read (cont)
   "Install CONT as a callback for GHCi output.
@@ -620,9 +611,40 @@ Called in process buffer."
 
 (defun dante-wait-for-prompt (acc cont)
   "ACC umulate input until prompt is found and call CONT."
-  (if (string-match "\4\\(.*\\)|" acc) (funcall cont acc)
+  (if (string-match "\4\\(.*\\)|" acc) (funcall cont acc (match-string))
     (dante-cps-let ((input (dante-async-read)))
       (dante-wait-for-prompt (concat acc input) cont))))
+
+;; (defun dante-report-ghci-progress ()
+;;   "In the dante buffer, look for GHCi progress and inform the user."
+;;   (goto-char (point-max))
+;;   (when (search-backward "\n" nil t 2)
+;;     (forward-char)
+;;     (let ((message
+;;           (cond ((search-forward-regexp "\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\)" nil t)
+;;                  (format "%s/%s(%s)" (match-string 1) (match-string 2) (match-string 3))))))
+;;     (when message (message "GHCi: %s" message)))))
+
+(defun dante-load-loop (acc summary cont)
+  "ACC umulate input until prompt is found and call CONT."
+  (let ((m (string-match
+            (s-join "\\|" '("^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)"
+                            "^\\[\\(?1:[0-9]*\\) of \\(?2:[0-9]*\\)\\] Compiling \\(?3:[^ ]*\\).*"
+                            "^Ok, modules loaded:[ ]*\\(?1:[^ ]*\\)[ ]*(.*)."
+                            "^\4\\(?1:.*\\)|"))
+            acc)))
+    (if m
+        (progn
+          (acc (substring ...))
+          (case (first char match
+                       (?\[ -> 'compiling (match-string 3)
+                            (dante-load-loop acc summary))
+                       (?O -> wait for prompt
+                           (cont 'ok summary modules))
+                       4 -> (cont 'failed summary modules)
+                       _ -> (dante-load-loop acc (cons summary errormsg) cont))))
+      (dante-cps-let ((input (dante-async-read)))
+        (dante-load-loop (concat acc input) summary cont)))))
 
 (defun dante-async-call (cmd cont)
   "Send GHCi the command string CMD.
@@ -632,8 +654,8 @@ from a valid session."
   (let ((source-marker (point-marker)))
     (with-current-buffer (dante-buffer-p)
       (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n"))
-      (dante-cps-let ((s (dante-wait-for-prompt "")))
-        (setq dante-loaded-modules (match-string 1 s))
+      (dante-cps-let (((s loaded-mods) (dante-wait-for-prompt "")))
+        (setq dante-loaded-modules loaded-mods)
         (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
           (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
           (with-current-buffer (marker-buffer source-marker)
@@ -735,7 +757,7 @@ Note that sub-sessions are not interleaved."
   (let* ((root (dante-project-root)))
     (with-current-buffer (get-buffer-create (dante-buffer-name))
       (cd root)
-      (fundamental-mode) ;; note: this has several effects, including resetting the local variables
+      (fundamental-mode) ;; this has several effects, including resetting the local variables
       (current-buffer))))
 
 (defun dante-set-state (state)
