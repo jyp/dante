@@ -602,7 +602,7 @@ other sub-sessions start running.)"
       buffer))
 
 (defun dante-report-ghci-progress ()
-  "In the dante buffer, look for GHCi process and inform the user."
+  "In the dante buffer, look for GHCi progress and inform the user."
   (goto-char (point-max))
   (when (search-backward "\n" nil t 2)
     (forward-char)
@@ -611,12 +611,18 @@ other sub-sessions start running.)"
                  (format "%s/%s(%s)" (match-string 1) (match-string 2) (match-string 3))))))
     (when message (message "GHCi: %s" message)))))
 
-(defun dante-async (cont)
+(defun dante-async-read (cont)
   "Install CONT as a callback for GHCi output.
 Called in process buffer."
     (when dante-callback
       (error "Try to set a callback (%s), but one exists already! (%s)" cont dante-callback))
     (setq dante-callback cont))
+
+(defun dante-wait-for-prompt (acc cont)
+  "ACC umulate input until prompt is found and call CONT."
+  (if (string-match "\4\\(.*\\)|" acc) (funcall cont acc)
+    (dante-cps-let ((input (dante-async-read)))
+      (dante-wait-for-prompt (concat acc input) cont))))
 
 (defun dante-async-call (cmd cont)
   "Send GHCi the command string CMD.
@@ -688,14 +694,6 @@ around and Dante will not attempt to restart GHCi.
 You can always run `dante-restart' to make it try again.
 ")
     'face 'compilation-error)))
-
-(defun dante-wait-for-prompt (acc cont)
-  "Wait for a GHCi prompt.
-Input text is ACC umulated.  CONT eventually is called with all
-concatenated text."
-  (if (string-match "\4\\(.*\\)|" acc) (funcall cont acc)
-    (dante-cps-let ((input (dante-async)))
-      (dante-wait-for-prompt (concat acc input) cont))))
 
 (defun dante-read-buffer ()
   "Process GHCi output."
