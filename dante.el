@@ -152,10 +152,10 @@ will be returned.  Otherwise, use
 
 (defun dante-status ()
   "Return dante's status for the current source buffer."
-  (pcase (dante-get-var 'dante-state)
-    ('running (if (dante-get-var 'dante-callback) (format "busy(%s)" (1+ (length (dante-get-var 'dante-queue))))
-                (dante-get-var 'dante-loaded-modules)))
-    (state (symbol-name state))))
+  (if (dante-get-var 'dante-callback)
+      (format "busy(%s)" (1+ (length (dante-get-var 'dante-queue))))
+    (dante-get-var 'dante-loaded-modules)
+  (format "%s" (dante-get-var 'dante-state))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
@@ -195,12 +195,12 @@ if the argument is omitted or nil or a positive integer).
 (defvar-local dante-package-name nil "The package name associated with the current buffer.")
 (defvar-local dante-state nil
   "nil: initial state
-- starting: GHCi starting
-- running: GHCi running
 - deleting: The process of the buffer is being deleted.
 - dead: GHCi died on its own. Do not try restarting
 automatically. The user will have to manually run `dante-restart'
-to destroy the buffer and create a fresh one without this variable enabled.")
+to destroy the buffer and create a fresh one without this variable enabled.
+- other value: informative value for the user about what GHCi is doing
+")
 
 (defun dante-get-var (symbol)
   "Return the value of SYMBOL in the GHCi process buffer."
@@ -279,33 +279,33 @@ The continuation must call its first argument; see `dante-session'."
 ;; Note that the GHCi doc for :l and :r appears to be wrong. TEST before changing this code.
   (let* ((epoch (buffer-modified-tick))
          (unchanged (equal epoch dante-temp-epoch))
+         (source-buffer (current-buffer))
          (fname (dante-temp-file-name (current-buffer))))
     (unless unchanged ; so GHCi's :r may be a no-op; save some time if remote
       (setq dante-temp-epoch epoch)
       (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0))
     (dante-cps-let (((buffer done) (dante-session))
                     (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
-                    (load-message
-                     (dante-async-call
-                      (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
-                          ":r" (concat ":l " (dante-local-name fname))))))
+                    (_ (dante-async-write buffer (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
+                                                     ":r" (concat ":l " (dante-local-name fname)))))
+                    ((status err-messages loaded-modules) (dante-async-with-buffer buffer (apply-partially 'dante-load-loop "" nil))))
+      (message "dante: load-loop done!")
       (let ((load-msg (with-current-buffer buffer
                         (setq dante-loaded-file fname)
-                        (if (and unchanged (string-match "OK, modules loaded: \\(.*\\)\\.$" load-message))
-                            dante-load-message
-                          (setq dante-load-message load-message)))))
+                        (if (and unchanged (eq status 'ok)) err-messages
+                          (setq dante-load-message err-messages)))))
         ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
-        (funcall cont done load-msg)))))
+        (with-current-buffer source-buffer (funcall cont done load-msg))))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
-    (dante-cps-let (((done string) (dante-async-load-current-buffer nil)))
-      (funcall done)
+    (dante-cps-let (((done messages) (dante-async-load-current-buffer nil)))
       (funcall cont
                'finished
                (--remove (eq 'splice (flycheck-error-level it))
-                         (dante-parse-errors-warnings-splices checker (current-buffer) string))))))
+                         (dante-parse-errors-warnings-splices checker (current-buffer) messages)))
+      (funcall done))))
 
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
@@ -313,36 +313,29 @@ process."
   :start 'dante-check
   :modes '(haskell-mode literate-haskell-mode))
 
-(defun dante-parse-errors-warnings-splices (checker buffer string)
-  "Parse flycheck errors and warnings.
+(defun dante-parse-errors-warnings-splices (checker buffer messages)
+  "Convert errors and warnings to flycheck format.
 CHECKER and BUFFER are added to each item parsed from STRING."
-  (let ((messages (list))
-        (temp-file (dante-local-name (dante-temp-file-name buffer))))
-    (while (and
-            (not (string-prefix-p "\nOk, modules loaded:" string)) ;; after that GHC may repeat already output messages.
-            (string-match
-             "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)"
-             string))
-      (let* ((file (dante-canonicalize-path (match-string 1 string)))
-             (location-raw (match-string 2 string))
-             (msg (s-trim (match-string 3 string)))
-             (s (substring string (match-end 0)))
-             (type (cond
-                    ((string-match-p "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" msg) 'error)
-                    ((string-match-p "^warning:" msg) 'warning)
-                    ((string-match-p "^splicing " msg) 'splice)
-                    (t 'error)))
-             (location (dante-parse-error-location location-raw))
-             (line (plist-get location :line))
-             (column (plist-get location :col)))
-        (setq string s)
-        (push (flycheck-error-new-at line column type msg
-                                     :checker checker
-                                     :buffer (when (string= temp-file file) buffer)
-                                     ;; TODO: report external errors somehow.
-                                     :filename (dante-buffer-file-name buffer))
-              messages)))
-    messages))
+  (let ((temp-file (dante-local-name (dante-temp-file-name buffer))))
+    (-map (lambda (string)
+     (let* ((_ (string-match "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)" string))
+            (file (dante-canonicalize-path (match-string 1 string)))
+            (location-raw (match-string 2 string))
+            (msg (s-trim (match-string 3 string)))
+            (type (cond
+                   ((string-match-p "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" msg) 'error)
+                   ((string-match-p "^warning:" msg) 'warning)
+                   ((string-match-p "^splicing " msg) 'splice)
+                   (t 'error)))
+            (location (dante-parse-error-location location-raw))
+            (line (plist-get location :line))
+            (column (plist-get location :col)))
+       (flycheck-error-new-at line column type msg
+                              :checker checker
+                              :buffer (when (string= temp-file file) buffer)
+                              ;; TODO: report external errors somehow.
+                              :filename (dante-buffer-file-name buffer))))
+     messages)))
 
 (defun dante-parse-error-location (string)
   "Parse the line number from the error in STRING."
@@ -585,13 +578,11 @@ other sub-sessions start running.)"
           ((_start-messages
             (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
         (dante-set-state 'running)
-        (dante-schedule-next buffer) ;; make sure that the desired continuation is run
-        (message "GHCi running!"))
+        (dante-schedule-next buffer)) ;; make sure that the desired continuation is run
       (set-process-filter
        process
        (lambda (process string)
-         (when (memq 'inputs dante-debug)
-           (message "[Dante] <- %s" string))
+         (when (memq 'inputs dante-debug) (message "[Dante] <- %s" string))
          (when (buffer-live-p (process-buffer process))
            (with-current-buffer (process-buffer process)
              (goto-char (point-max))
@@ -600,10 +591,8 @@ other sub-sessions start running.)"
       (set-process-sentinel process 'dante-sentinel)
       buffer))
 
-
-
 (defun dante-async-read (cont)
-  "Install CONT as a callback for GHCi output.
+  "Install CONT as a callback for an unknown portion GHCi output.
 Called in process buffer."
     (when dante-callback
       (error "Try to set a callback (%s), but one exists already! (%s)" cont dante-callback))
@@ -611,55 +600,62 @@ Called in process buffer."
 
 (defun dante-wait-for-prompt (acc cont)
   "ACC umulate input until prompt is found and call CONT."
-  (if (string-match "\4\\(.*\\)|" acc) (funcall cont acc (match-string))
+  (if (string-match "\4\\(.*\\)|" acc)
+      (funcall cont (substring acc 0 (1- (match-beginning 1))) (match-string 1 acc))
     (dante-cps-let ((input (dante-async-read)))
       (dante-wait-for-prompt (concat acc input) cont))))
 
-;; (defun dante-report-ghci-progress ()
-;;   "In the dante buffer, look for GHCi progress and inform the user."
-;;   (goto-char (point-max))
-;;   (when (search-backward "\n" nil t 2)
-;;     (forward-char)
-;;     (let ((message
-;;           (cond ((search-forward-regexp "\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\)" nil t)
-;;                  (format "%s/%s(%s)" (match-string 1) (match-string 2) (match-string 3))))))
-;;     (when message (message "GHCi: %s" message)))))
-
-(defun dante-load-loop (acc summary cont)
-  "ACC umulate input until prompt is found and call CONT."
-  (let ((m (string-match
-            (s-join "\\|" '("^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)"
-                            "^\\[\\(?1:[0-9]*\\) of \\(?2:[0-9]*\\)\\] Compiling \\(?3:[^ ]*\\).*"
-                            "^Ok, modules loaded:[ ]*\\(?1:[^ ]*\\)[ ]*(.*)."
-                            "^\4\\(?1:.*\\)|"))
-            acc)))
-    (if m
-        (progn
-          (acc (substring ...))
-          (case (first char match
-                       (?\[ -> 'compiling (match-string 3)
-                            (dante-load-loop acc summary))
-                       (?O -> wait for prompt
-                           (cont 'ok summary modules))
-                       4 -> (cont 'failed summary modules)
-                       _ -> (dante-load-loop acc (cons summary errormsg) cont))))
+(defun dante-load-loop (acc err-msgs cont)
+  "Parse the output of load command.
+ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages loaded-modules)."
+  (let* ((prompt "^\4\\(.*\\)|")
+         (success "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\.")
+         (errmsg "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)")
+         (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\).*")
+         (i (string-match (s-join "\\|" (list prompt success errmsg progress)) acc)))
+    (if i (let* ((m (match-string 0 acc))
+                 (acc (substring acc (match-end 0))))
+            (cond ((string-match prompt m)
+                   (setq dante-state 'type-error)
+                   (funcall cont 'failed (nreverse err-msgs) (match-string 1 m)))
+                  ((string-match progress m)
+                   (setq dante-state (list 'compiling (match-string 3 m)))
+                   (dante-load-loop acc err-msgs cont))
+                  ((string-match success m)
+                   (dante-cps-let (((_ loaded-mods) (dante-wait-for-prompt acc)))
+                     (setq dante-state (list 'loaded loaded-mods))
+                     (funcall cont 'ok (nreverse err-msgs) loaded-mods)))
+                  (t (dante-load-loop acc (cons m err-msgs) cont))))
       (dante-cps-let ((input (dante-async-read)))
-        (dante-load-loop (concat acc input) summary cont)))))
+        (dante-load-loop (concat acc input) err-msgs cont)))))
+
+(defun dante-async-write (buffer cmd cont)
+  "Write to dante BUFFER the CMD and call CONT."
+  (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
+  (process-send-string (get-buffer-process buffer) (concat cmd "\n"))
+  (funcall cont ()))
+
+(defun dante-async-with-buffer (buffer f cont)
+  "In BUFFER, call F, restore the context and call CONT with the results of the call."
+  (let ((source-marker (point-marker)))
+    (with-current-buffer buffer
+      (funcall f (lambda (&rest e)
+                   (with-current-buffer (marker-buffer source-marker)
+                     (save-excursion (goto-char source-marker)
+                                     (apply cont e))))))))
 
 (defun dante-async-call (cmd cont)
   "Send GHCi the command string CMD.
-The result is passed to CONT as (CONT REPLY).  Can only be called
-from a valid session."
-  (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
-  (let ((source-marker (point-marker)))
-    (with-current-buffer (dante-buffer-p)
-      (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n"))
-      (dante-cps-let (((s loaded-mods) (dante-wait-for-prompt "")))
+The response is passed to CONT as (CONT REPLY)."
+  (let ((buffer (dante-buffer-p))
+        (source-marker (point-marker)))
+    (with-current-buffer buffer
+      (dante-cps-let ((_ (dante-async-write buffer cmd))
+                      ((s loaded-mods) (dante-wait-for-prompt "")))
         (setq dante-loaded-modules loaded-mods)
-        (let ((string (dante--kill-last-newline (substring s 0 (1- (match-beginning 1))))))
-          (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd string))
-          (with-current-buffer (marker-buffer source-marker)
-            (save-excursion (goto-char source-marker) (funcall cont string))))))))
+        (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd s))
+        (with-current-buffer (marker-buffer source-marker)
+          (save-excursion (goto-char source-marker) (funcall cont (dante--kill-last-newline s))))))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
