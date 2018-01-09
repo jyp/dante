@@ -154,8 +154,7 @@ will be returned.  Otherwise, use
   "Return dante's status for the current source buffer."
   (if (dante-get-var 'dante-callback)
       (format "busy(%s)" (1+ (length (dante-get-var 'dante-queue))))
-    (dante-get-var 'dante-loaded-modules)
-  (format "%s" (dante-get-var 'dante-state))))
+    (format "%s" (dante-get-var 'dante-state))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
@@ -636,7 +635,7 @@ ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages load
   (funcall cont ()))
 
 (defun dante-async-with-buffer (buffer f cont)
-  "In BUFFER, call F, restore the context and call CONT with the results of the call."
+  "Save context, then in BUFFER, cps-call F call CONT with the results of the call in the restored context."
   (let ((source-marker (point-marker)))
     (with-current-buffer buffer
       (funcall f (lambda (&rest e)
@@ -647,15 +646,11 @@ ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages load
 (defun dante-async-call (cmd cont)
   "Send GHCi the command string CMD.
 The response is passed to CONT as (CONT REPLY)."
-  (let ((buffer (dante-buffer-p))
-        (source-marker (point-marker)))
-    (with-current-buffer buffer
-      (dante-cps-let ((_ (dante-async-write buffer cmd))
-                      ((s loaded-mods) (dante-wait-for-prompt "")))
-        (setq dante-loaded-modules loaded-mods)
-        (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd s))
-        (with-current-buffer (marker-buffer source-marker)
-          (save-excursion (goto-char source-marker) (funcall cont (dante--kill-last-newline s))))))))
+  (dante-cps-let
+      ((_ (dante-async-write (dante-buffer-p) cmd))
+       ((s _) (dante-async-with-buffer (dante-buffer-p) (apply-partially #'dante-wait-for-prompt ""))))
+    (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd s))
+    (funcall cont (dante--kill-last-newline s))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -668,8 +663,8 @@ This is a standard process sentinel function."
         (dante-show-process-problem process change)))))
 
 (defun dante-diagnose ()
-  (interactive)
   "Show all state info in a help buffer."
+  (interactive)
   (let ((info (dante-debug-info (dante-buffer-p))))
     (with-help-window (help-buffer)
       (with-current-buffer (help-buffer)
