@@ -585,17 +585,14 @@ Note that sub-sessions are not interleaved."
       (dante-cps-let
           ((_start-messages
             (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
-        (dante-set-state 'running)
-        (dante-schedule-next buffer)) ;; make sure that the desired continuation is run
+        (dante-set-state 'running))
       (set-process-filter
        process
        (lambda (process string)
          (when (memq 'inputs dante-debug) (message "[Dante] <- %s" string))
          (when (buffer-live-p (process-buffer process))
            (with-current-buffer (process-buffer process)
-             (goto-char (point-max))
-             (insert string)
-             (dante-read-buffer)))))
+             (dante-read string)))))
       (set-process-sentinel process 'dante-sentinel)
       buffer))
 
@@ -695,7 +692,7 @@ This is a standard process sentinel function."
   (insert "\n---\n\n")
   (insert
    (propertize
-    (concat "This is where GHCi output is bufferized. This buffer
+    (concat "This is the buffer associated with the GHCi session. This buffer
 is normally hidden, but the GHCi process ended.
 
 EXTRA TROUBLESHOOTING INFO
@@ -717,12 +714,11 @@ You can always run `dante-restart' to make it try again.
 ")
     'face 'compilation-error)))
 
-(defun dante-read-buffer ()
-  "Process GHCi output."
+(defun dante-read (string)
+  "Process GHCi output as STRING."
   (let ((callback dante-callback)
-        (string (dante--strip-carriage-returns (buffer-string))))
+        (string (dante--strip-carriage-returns string)))
     (unless dante-callback (error "Received output in %s (%s) but no callback is installed" (current-buffer) string))
-    (delete-region (point-min) (point-max))
     (setq dante-callback nil)
     (funcall callback string)))
 
