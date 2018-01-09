@@ -601,7 +601,7 @@ Called in process buffer."
       (error "Try to set a callback (%s), but one exists already! (%s)" cont dante-callback))
     (setq dante-callback cont))
 
-(defconst dante-ghci-prompt "^\4\\(.*\\)|")
+(defconst dante-ghci-prompt "\4\\(.*\\)|")
 (defconst dante-err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)")
 (defun dante-wait-for-prompt (acc cont)
   "ACC umulate input until prompt is found and call CONT."
