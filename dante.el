@@ -188,7 +188,6 @@ if the argument is omitted or nil or a positive integer).
 
 (defvar-local dante-load-message nil "load messages")
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
-(defvar-local dante-loaded-modules "" "Loaded modules as a string, reported by GHCi")
 (defvar-local dante-queue nil "List of ready GHCi queries.")
 (defvar-local dante-callback nil "Callback waiting for output.")
 (defvar-local dante-package-name nil "The package name associated with the current buffer.")
@@ -675,7 +674,7 @@ This is a standard process sentinel function."
   (if buffer
       (with-current-buffer buffer
         (s-join "\n" (--map (format "%s %s" it (eval it))
-                            '(default-directory dante-command-line dante-loaded-modules dante-state dante-queue dante-callback dante-load-message))))
+                            '(default-directory dante-command-line dante-state dante-queue dante-callback dante-load-message))))
     (format "No GHCi interaction buffer")))
 
 (defun dante-show-process-problem (process change)
