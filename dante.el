@@ -297,11 +297,12 @@ The continuation must call its first argument; see `dante-session'."
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
     (dante-cps-let (((done messages) (dante-async-load-current-buffer nil)))
+      (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer)))))
       (funcall cont
                'finished
                (--remove (eq 'splice (flycheck-error-level it))
-                         (dante-parse-errors-warnings-splices checker (current-buffer) messages)))
-      (funcall done))))
+                         (--map (dante-fly-message it checker (current-buffer) temp-file) messages)))
+      (funcall done)))))
 
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
@@ -309,29 +310,26 @@ process."
   :start 'dante-check
   :modes '(haskell-mode literate-haskell-mode))
 
-(defun dante-parse-errors-warnings-splices (checker buffer messages)
-  "Convert errors and warnings to flycheck format.
-CHECKER and BUFFER are added to each item in MESSAGES."
-  (let ((temp-file (dante-local-name (dante-temp-file-name buffer))))
-    (-map (lambda (string)
-     (let* ((_ (string-match "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)" string))
-            (file (dante-canonicalize-path (match-string 1 string)))
-            (location-raw (match-string 2 string))
-            (msg (s-trim (match-string 3 string)))
-            (type (cond
-                   ((string-match-p "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" msg) 'error)
-                   ((string-match-p "^warning:" msg) 'warning)
-                   ((string-match-p "^splicing " msg) 'splice)
-                   (t 'error)))
-            (location (dante-parse-error-location location-raw))
-            (line (plist-get location :line))
-            (column (plist-get location :col)))
-       (flycheck-error-new-at line column type msg
-                              :checker checker
-                              :buffer (when (string= temp-file file) buffer)
-                              ;; TODO: report external errors somehow.
-                              :filename (dante-buffer-file-name buffer))))
-     messages)))
+(defun dante-fly-message (string checker buffer temp-file)
+  "Convert the STRING message to flycheck format.
+CHECKER and BUFFER are added if the error is in TEMP-FILE."
+  (let* ((_ (string-match dante-err-regexp string))
+         (file (dante-canonicalize-path (match-string 1 string)))
+         (location-raw (match-string 2 string))
+         (msg (s-trim (match-string 3 string)))
+         (type (cond
+                ((string-match-p "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" msg) 'error)
+                ((string-match-p "^warning:" msg) 'warning)
+                ((string-match-p "^splicing " msg) 'splice)
+                (t 'error)))
+         (location (dante-parse-error-location location-raw))
+         (line (plist-get location :line))
+         (column (plist-get location :col)))
+    (flycheck-error-new-at line column type msg
+                           :checker checker
+                           :buffer (when (string= temp-file file) buffer)
+                           ;; TODO: report external errors somehow.
+                           :filename (dante-buffer-file-name buffer))))
 
 (defun dante-parse-error-location (string)
   "Parse the line number from the error in STRING."
@@ -603,9 +601,11 @@ Called in process buffer."
       (error "Try to set a callback (%s), but one exists already! (%s)" cont dante-callback))
     (setq dante-callback cont))
 
+(defconst dante-ghci-prompt "^\4\\(.*\\)|")
+(defconst dante-err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)")
 (defun dante-wait-for-prompt (acc cont)
   "ACC umulate input until prompt is found and call CONT."
-  (if (string-match "\4\\(.*\\)|" acc)
+  (if (string-match dante-ghci-prompt acc)
       (funcall cont (substring acc 0 (1- (match-beginning 1))) (match-string 1 acc))
     (dante-cps-let ((input (dante-async-read)))
       (dante-wait-for-prompt (concat acc input) cont))))
@@ -613,14 +613,12 @@ Called in process buffer."
 (defun dante-load-loop (acc err-msgs cont)
   "Parse the output of load command.
 ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages loaded-modules)."
-  (let* ((prompt "^\4\\(.*\\)|")
-         (success "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\.")
-         (errmsg "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)")
+  (let* ((success "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\.")
          (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\).*")
-         (i (string-match (s-join "\\|" (list prompt success errmsg progress)) acc)))
+         (i (string-match (s-join "\\|" (list dante-ghci-prompt success dante-err-regexp progress)) acc)))
     (if i (let* ((m (match-string 0 acc))
                  (acc (substring acc (match-end 0))))
-            (cond ((string-match prompt m)
+            (cond ((string-match dante-ghci-prompt m)
                    (setq dante-state 'type-error)
                    (funcall cont 'failed (nreverse err-msgs) (match-string 1 m)))
                   ((string-match progress m)
