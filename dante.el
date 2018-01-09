@@ -270,7 +270,6 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck checker
 
-
 (defun dante-async-load-current-buffer (interpret cont)
   "Load and maybe INTERPRET the temp file for current buffer and run CONT in a session.
 The continuation must call its first argument; see `dante-session'."
@@ -287,7 +286,6 @@ The continuation must call its first argument; see `dante-session'."
                     (_ (dante-async-write buffer (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
                                                      ":r" (concat ":l " (dante-local-name fname)))))
                     ((status err-messages loaded-modules) (dante-async-with-buffer buffer (apply-partially 'dante-load-loop "" nil))))
-      (message "dante: load-loop done!")
       (let ((load-msg (with-current-buffer buffer
                         (setq dante-loaded-file fname)
                         (if (and unchanged (eq status 'ok)) err-messages
@@ -313,7 +311,7 @@ process."
 
 (defun dante-parse-errors-warnings-splices (checker buffer messages)
   "Convert errors and warnings to flycheck format.
-CHECKER and BUFFER are added to each item parsed from STRING."
+CHECKER and BUFFER are added to each item in MESSAGES."
   (let ((temp-file (dante-local-name (dante-temp-file-name buffer))))
     (-map (lambda (string)
      (let* ((_ (string-match "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)" string))
@@ -542,12 +540,24 @@ x:\\foo\\bar (i.e., Windows)."
 (defun dante-session (cont)
   "Run the CONT in a valid GHCi session for the current (source) buffer.
 CONT is called as (CONT process-buffer done).  CONT must call
-done when it is done sending commands.  (Only by calling done can
+done when it is done sending commands.  (Only by calling 'done' can
 other sub-sessions start running.)"
-  (let ((source-buffer (current-buffer))
-        (buffer (or (dante-buffer-p) (dante-start))))
-    (with-current-buffer buffer (push (list :func cont :source-buffer source-buffer) dante-queue))
-    (dante-schedule-next buffer)))
+  (dante-async-with-buffer (or (dante-buffer-p) (dante-start)) #'dante-async-yield cont))
+
+(defun dante-async-yield (cont)
+  "Run CONT when GHCi becomes available for executing a session."
+  (push cont dante-queue)
+  (dante-schedule-next (current-buffer)))
+
+(defun dante-schedule-next (buffer)
+  "If GHCi is idle, run the next queued GHCi sub-session for BUFFER, if any.
+Note that sub-sessions are not interleaved."
+  (with-current-buffer buffer
+    (unless dante-callback
+      (let ((req (pop dante-queue)))
+        (when req
+          (funcall req buffer (apply-partially #'dante-schedule-next buffer))))))
+  (force-mode-line-update))
 
 (defcustom dante-load-flags '("+c" "-fno-diagnostics-show-caret")
   "Flags to set whenever GHCi is started."
@@ -715,18 +725,6 @@ You can always run `dante-restart' to make it try again.
     (delete-region (point-min) (point-max))
     (setq dante-callback nil)
     (funcall callback string)))
-
-(defun dante-schedule-next (buffer)
-  "If GHCi is idle, run the next queued GHCi sub-session for BUFFER, if any.
-Note that sub-sessions are not interleaved."
-  (with-current-buffer buffer
-    (unless dante-callback
-      (let ((req (pop dante-queue)))
-        (when req
-          (with-current-buffer (plist-get req :source-buffer)
-            (funcall (plist-get req :func) buffer
-                     (apply-partially #'dante-schedule-next buffer)))))))
-  (force-mode-line-update))
 
 (defun dante--strip-carriage-returns (string)
   "Return the STRING stripped of its \\r occurences."
