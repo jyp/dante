@@ -288,7 +288,7 @@ The continuation must call its first argument; see `dante-session'."
                     ((status err-messages loaded-modules) (dante-async-with-buffer buffer (apply-partially 'dante-load-loop "" nil))))
       (let ((load-msg (with-current-buffer buffer
                         (setq dante-loaded-file fname)
-                        (if (and unchanged (eq status 'ok)) err-messages
+                        (if (and unchanged (eq status 'ok)) dante-load-message
                           (setq dante-load-message err-messages)))))
         ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
         (with-current-buffer source-buffer (funcall cont done load-msg))))))
