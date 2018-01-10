@@ -118,10 +118,8 @@ otherwise look for a .cabal file, or use the current dir."
                                                       '("nix-shell" "--run" (if dante-target (concat "cabal repl " dante-target) "cabal repl")))))
     (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl" dante-target))))
     (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl" dante-target))))
-    (new-build . ,(lambda (root)
-                    (when (or (directory-files root nil ".*\\.cabal$")
-                              (file-exists-p "cabal.project"))
-                      '("cabal" "new-repl" dante-target))))
+    (new-build . ,(lambda (root) (when (or (directory-files root nil ".*\\.cabal$") (file-exists-p "cabal.project"))
+                                   '("cabal" "new-repl" dante-target))))
     (bare  . ,(lambda (_) '("cabal" "repl" dante-target))))
 "GHCi launch command lines.
 This is an alist from method name to a function taking the root
@@ -202,8 +200,7 @@ to destroy the buffer and create a fresh one without this variable enabled.
 
 (defun dante-get-var (symbol)
   "Return the value of SYMBOL in the GHCi process buffer."
-  (let ((bp (dante-buffer-p)))
-    (when bp (buffer-local-value symbol bp))))
+  (let ((bp (dante-buffer-p))) (when bp (buffer-local-value symbol bp))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive utils
@@ -310,6 +307,7 @@ process."
   :start 'dante-check
   :modes '(haskell-mode literate-haskell-mode))
 
+(defconst dante-err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)")
 (defun dante-fly-message (string checker buffer temp-file)
   "Convert the STRING message to flycheck format.
 CHECKER and BUFFER are added if the error is in TEMP-FILE."
@@ -353,7 +351,7 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 See ``company-backends'' for the meaning of COMMAND and _ARGS."
   (let ((prefix (when (and dante-mode (dante-ident-pos-at-point))
                   (let* ((id-start (car (dante-ident-pos-at-point)))
-                         (import-found (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
+                         (_ (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
                          (import-end (match-end 0))
                          (import-start (match-beginning 0))
                          (is-import (eq import-end id-start)))
@@ -590,7 +588,10 @@ Note that sub-sessions are not interleaved."
          (when (memq 'inputs dante-debug) (message "[Dante] <- %s" string))
          (when (buffer-live-p (process-buffer process))
            (with-current-buffer (process-buffer process)
-             (dante-read string)))))
+             (let ((callback dante-callback))
+               (unless callback (error "Received output in %s (%s) but no callback is installed" (current-buffer) string))
+               (setq dante-callback nil)
+               (funcall callback (dante--strip-carriage-returns string)))))))
       (set-process-sentinel process 'dante-sentinel)
       buffer))
 
@@ -602,7 +603,6 @@ Called in process buffer."
     (setq dante-callback cont))
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
-(defconst dante-err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)")
 (defun dante-wait-for-prompt (acc cont)
   "ACC umulate input until prompt is found and call CONT."
   (if (string-match dante-ghci-prompt acc)
@@ -619,7 +619,7 @@ ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages load
     (if i (let* ((m (match-string 0 acc))
                  (acc (substring acc (match-end 0))))
             (cond ((string-match dante-ghci-prompt m)
-                   (setq dante-state 'type-error)
+                   (setq dante-state 'ghc-reports-error)
                    (funcall cont 'failed (nreverse err-msgs) (match-string 1 m)))
                   ((string-match progress m)
                    (setq dante-state (list 'compiling (match-string 3 m)))
@@ -706,19 +706,11 @@ customize (probably file-locally or directory-locally)
 fixed the problem, just kill this buffer, Dante will make a fresh
 one and attempt to restart GHCi automatically.
 
-If you are unable to fix the problem, just leave this buffer
-around and Dante will not attempt to restart GHCi.
-You can always run `dante-restart' to make it try again.
+If you do not want Dante will not attempt to restart GHCi, just
+leave this buffer around. You can always run `dante-restart' to
+make it try again.
 ")
     'face 'compilation-error)))
-
-(defun dante-read (string)
-  "Process GHCi output as STRING."
-  (let ((callback dante-callback)
-        (string (dante--strip-carriage-returns string)))
-    (unless dante-callback (error "Received output in %s (%s) but no callback is installed" (current-buffer) string))
-    (setq dante-callback nil)
-    (funcall callback string)))
 
 (defun dante--strip-carriage-returns (string)
   "Return the STRING stripped of its \\r occurences."
@@ -1019,7 +1011,7 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
                        (or (and (search-forward-regexp "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t 1)
                                 (match-beginning 0))
                            block-end)))
-      (insert (apply 'concat (--map (concat "-- " it "\n") (--filter (not (s-blank? it)) (s-lines res)))))
+      (insert (apply 'concat (--map (concat "-- " it "\n") (--remove (s-blank? it) (s-lines res)))))
       (beginning-of-line)
       (dante-eval-loop done block-end))))
 
