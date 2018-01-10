@@ -591,7 +591,7 @@ Note that sub-sessions are not interleaved."
              (let ((callback dante-callback))
                (unless callback (error "Received output in %s (%s) but no callback is installed" (current-buffer) string))
                (setq dante-callback nil)
-               (funcall callback (dante--strip-carriage-returns string)))))))
+               (funcall callback (s-replace "\r" "" string)))))))
       (set-process-sentinel process 'dante-sentinel)
       buffer))
 
@@ -654,7 +654,7 @@ The response is passed to CONT as (CONT REPLY)."
       ((_ (dante-async-write (dante-buffer-p) cmd))
        ((s _) (dante-async-with-buffer (dante-buffer-p) (apply-partially #'dante-wait-for-prompt ""))))
     (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd s))
-    (funcall cont (dante--kill-last-newline s))))
+    (funcall cont (s-trim-right s))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -711,14 +711,6 @@ leave this buffer around. You can always run `dante-restart' to
 make it try again.
 ")
     'face 'compilation-error)))
-
-(defun dante--strip-carriage-returns (string)
-  "Return the STRING stripped of its \\r occurences."
-  (replace-regexp-in-string "\r" "" string))
-
-(defun dante--kill-last-newline (string)
-  "Strip the last newline character in STRING."
-  (replace-regexp-in-string "\n$" "" string))
 
 (defun dante-buffer-name ()
   "Create a dante process buffer name."
