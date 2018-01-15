@@ -150,9 +150,10 @@ will be returned.  Otherwise, use
 
 (defun dante-status ()
   "Return dante's status for the current source buffer."
-  (if (dante-get-var 'dante-callback)
-      (format "busy(%s)" (1+ (length (dante-get-var 'dante-queue))))
-    (format "%s" (dante-get-var 'dante-state))))
+  (s-join ":"
+   (-non-nil (list (format "%s" (dante-get-var 'dante-state))
+                   (when (dante-get-var 'dante-callback)
+                     (format "busy(%s)" (1+ (length (dante-get-var 'dante-queue)))))))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
@@ -307,7 +308,6 @@ process."
   :start 'dante-check
   :modes '(haskell-mode literate-haskell-mode))
 
-(defconst dante-err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\(\n[ ]+.*\\)*\\)")
 (defun dante-fly-message (string checker buffer temp-file)
   "Convert the STRING message to flycheck format.
 CHECKER and BUFFER are added if the error is in TEMP-FILE."
@@ -610,25 +610,28 @@ Called in process buffer."
     (dante-cps-let ((input (dante-async-read)))
       (dante-wait-for-prompt (concat acc input) cont))))
 
+(defconst dante-err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\)\n\\([ ]+.*\n\\)*")
 (defun dante-load-loop (acc err-msgs cont)
   "Parse the output of load command.
 ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages loaded-modules)."
+  (setq dante-state 'loading)
   (let* ((success "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\.")
          (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\).*")
          (i (string-match (s-join "\\|" (list dante-ghci-prompt success dante-err-regexp progress)) acc)))
-    (if i (let* ((m (match-string 0 acc))
-                 (acc (substring acc (match-end 0))))
+    (if i (let* ((m (match-string 0 acc)))
             (cond ((string-match dante-ghci-prompt m)
                    (setq dante-state 'ghc-reports-error)
                    (funcall cont 'failed (nreverse err-msgs) (match-string 1 m)))
                   ((string-match progress m)
                    (setq dante-state (list 'compiling (match-string 3 m)))
-                   (dante-load-loop acc err-msgs cont))
+                   (dante-load-loop (substring acc (match-end 0)) err-msgs cont))
                   ((string-match success m)
                    (dante-cps-let (((_ loaded-mods) (dante-wait-for-prompt acc)))
                      (setq dante-state (list 'loaded loaded-mods))
                      (funcall cont 'ok (nreverse err-msgs) loaded-mods)))
-                  (t (dante-load-loop acc (cons m err-msgs) cont))))
+                  ((/= (elt acc (length m)) ? ) ;; make sure we're matching a full error message
+                   (dante-load-loop (substring acc (match-end 0)) (cons m err-msgs) cont))
+                  (t (dante-load-loop acc err-msgs cont))))
       (dante-cps-let ((input (dante-async-read)))
         (dante-load-loop (concat acc input) err-msgs cont)))))
 
