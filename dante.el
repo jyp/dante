@@ -631,6 +631,7 @@ ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages load
            (dante-cps-let (((_ loaded-mods) (dante-wait-for-prompt acc)))
              (setq dante-state (list 'loaded loaded-mods))
              (funcall cont 'ok (nreverse err-msgs) loaded-mods)))
+             ;; FIXME: sometimes, when there are only warnings, GHCi shows them AFTER "ok, modules loaded".
           ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
            (dante-load-loop rest (cons m err-msgs) cont))
           (t (dante-cps-let ((input (dante-async-read)))
