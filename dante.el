@@ -881,7 +881,7 @@ a list is returned instead of failing with a nil result."
 ;; Auto-fix
 
 (defcustom dante-suggestible-extensions
-  '("AllowAmbiguousTypes" "BangPatterns" "ConstraintKinds" "DataKinds" "DeriveFoldable" "DeriveFunctor" "DeriveGeneric" "DeriveTraversable" "EmptyCase" "FlexibleContexts" "FlexibleInstances" "FunctionalDependencies" "GADTs" "GeneralizedNewtypeDeriving" "InstanceSigs" "KindSignatures" "MultiParamTypeClasses" "PartialTypeSignatures" "PatternSynonyms" "PolyKinds" "RankNTypes" "RecordWildCards" "ScopedTypeVariables" "StandaloneDeriving" "TupleSections" "TypeApplications" "TypeFamilies" "TypeInType" "TypeOperators" "TypeSynonymInstances" "UndecidableSuperClasses" "UndecidableInstances" "ViewPatterns")
+  '("AllowAmbiguousTypes" "BangPatterns" "ConstraintKinds" "DataKinds" "DeriveFoldable" "DeriveFunctor" "DeriveGeneric" "DeriveTraversable" "EmptyCase" "FlexibleContexts" "FlexibleInstances" "FunctionalDependencies" "GADTs" "GeneralizedNewtypeDeriving" "InstanceSigs" "KindSignatures" "MultiParamTypeClasses" "PartialTypeSignatures" "PatternSynonyms" "PolyKinds" "RankNTypes" "RecordWildCards" "ScopedTypeVariables" "StandaloneDeriving" "TransformListComp" "TupleSections" "TypeApplications" "TypeFamilies" "TypeInType" "TypeOperators" "TypeSynonymInstances" "UndecidableSuperClasses" "UndecidableInstances" "ViewPatterns" )
   "Language extensions that Dante can use to fix errors."
   :group 'dante
   :type '(repeat string))
