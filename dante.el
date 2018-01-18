@@ -308,27 +308,20 @@ process."
   :start 'dante-check
   :modes '(haskell-mode literate-haskell-mode))
 
-(defun dante-fly-message (string checker buffer temp-file)
-  "Convert the STRING message to flycheck format.
+(defun dante-fly-message (matched checker buffer temp-file)
+  "Convert the MATCHED message to flycheck format.
 CHECKER and BUFFER are added if the error is in TEMP-FILE."
-  (let* ((_ (string-match dante-err-regexp string))
-         (file (dante-canonicalize-path (match-string 1 string)))
-         (location-raw (match-string 2 string))
-         (err-type (match-string 3 string))
-         (msg (s-trim-right (match-string 4 string)))
-         (type (cond
-                ((string-match-p "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) 'error)
-                ((string-match-p "^warning:" err-type) 'warning)
-                ((string-match-p "^splicing " err-type) 'splice)
-                (t 'error)))
-         (location (dante-parse-error-location location-raw))
-         (line (plist-get location :line))
-         (column (plist-get location :col)))
-    (flycheck-error-new-at line column type msg
-                           :checker checker
-                           :buffer (when (string= temp-file file) buffer)
-                           ;; TODO: report external errors somehow.
-                           :filename (dante-buffer-file-name buffer))))
+  (cl-destructuring-bind (file location-raw err-type msg _) matched
+    (let* ((type (cond
+                  ((s-matches? "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) 'error)
+                  ((s-matches? "^warning:" err-type) 'warning)
+                  ((s-matches? "^splicing " err-type) 'splice)
+                  (t 'error)))
+           (location (dante-parse-error-location location-raw)))
+      (flycheck-error-new-at (plist-get location :line) (plist-get location :col) type (s-trim-right msg)
+                             :checker checker
+                             :buffer (when (string= temp-file file) buffer)
+                             :filename (dante-buffer-file-name buffer)))))
 
 (defun dante-parse-error-location (string)
   "Parse the line number from the error in STRING."
@@ -611,14 +604,14 @@ Called in process buffer."
     (dante-cps-let ((input (dante-async-read)))
       (dante-wait-for-prompt (concat acc input) cont))))
 
-(defconst dante-err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\)\n\\(\\([ ]+.*\n\\)*\\)")
 (defun dante-load-loop (acc err-msgs cont)
   "Parse the output of load command.
 ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages loaded-modules)."
   (setq dante-state 'loading)
   (let* ((success "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\.")
          (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\).*")
-         (i (string-match (s-join "\\|" (list dante-ghci-prompt success dante-err-regexp progress)) acc))
+         (err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\)\n\\(\\([ ]+.*\n\\)*\\)")
+         (i (string-match (s-join "\\|" (list dante-ghci-prompt success err-regexp progress)) acc))
          (m (when i (match-string 0 acc)))
          (rest (when i (substring acc (match-end 0)))))
     (cond ((and m (string-match dante-ghci-prompt m))
@@ -635,7 +628,7 @@ ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages load
              (setq dante-state (list 'loaded loaded-mods))
              (funcall cont 'ok (or (nreverse err-msgs) warning-msgs) loaded-mods)))
           ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
-           (dante-load-loop rest (cons m err-msgs) cont))
+           (dante-load-loop rest (cons (cdr (s-match err-regexp m)) err-msgs) cont))
           (t (dante-cps-let ((input (dante-async-read)))
                (dante-load-loop (concat acc input) err-msgs cont))))))
 
@@ -685,7 +678,7 @@ This is a standard process sentinel function."
   "Show debug info for dante buffer BUFFER."
   (if buffer
       (with-current-buffer buffer
-        (s-join "\n" (--map (format "%s %s" it (eval it))
+        (s-join "\n" (--map (format "%s %S" it (eval it))
                             '(default-directory dante-command-line dante-state dante-queue dante-callback dante-load-message))))
     (format "No GHCi interaction buffer")))
 
