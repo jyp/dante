@@ -311,7 +311,7 @@ process."
 (defun dante-fly-message (matched checker buffer temp-file)
   "Convert the MATCHED message to flycheck format.
 CHECKER and BUFFER are added if the error is in TEMP-FILE."
-  (cl-destructuring-bind (file location-raw err-type msg _) matched
+  (cl-destructuring-bind (file location-raw err-type msg) matched
     (let* ((type (cond
                   ((s-matches? "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) 'error)
                   ((s-matches? "^warning:" err-type) 'warning)
@@ -594,7 +594,8 @@ Note that sub-sessions are not interleaved."
 Called in process buffer."
     (when dante-callback
       (error "Try to set a callback (%s), but one exists already! (%s)" cont dante-callback))
-    (setq dante-callback cont))
+    (setq dante-callback cont)
+    (force-mode-line-update))
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
 (defun dante-wait-for-prompt (acc cont)
@@ -628,7 +629,7 @@ ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages load
              (setq dante-state (list 'loaded loaded-mods))
              (funcall cont 'ok (or (nreverse err-msgs) warning-msgs) loaded-mods)))
           ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
-           (dante-load-loop rest (cons (cdr (s-match err-regexp m)) err-msgs) cont))
+           (dante-load-loop rest (cons (-take 4 (cdr (s-match err-regexp m))) err-msgs) cont))
           (t (dante-cps-let ((input (dante-async-read)))
                (dante-load-loop (concat acc input) err-msgs cont))))))
 
