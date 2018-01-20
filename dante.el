@@ -275,14 +275,14 @@ The continuation must call its first argument; see `dante-session'."
   (let* ((epoch (buffer-modified-tick))
          (unchanged (equal epoch dante-temp-epoch))
          (source-buffer (current-buffer))
-         (fname (dante-temp-file-name (current-buffer))))
+         (fname (dante-temp-file-name (current-buffer)))
+         (local-name (dante-local-name fname)))
     (unless unchanged ; so GHCi's :r may be a no-op; save some time if remote
       (setq dante-temp-epoch epoch)
       (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0))
     (dante-cps-let (((buffer done) (dante-session))
                     (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
-                    (_ (dante-async-write buffer (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
-                                                     ":r" (concat ":l " (dante-local-name fname)))))
+                    (_ (dante-async-write buffer (if interpret (concat ":l *" local-name) (concat ":l " local-name))))
                     ((status err-messages loaded-modules) (dante-async-with-buffer buffer (apply-partially 'dante-load-loop "" nil))))
       (let ((load-msg (with-current-buffer buffer
                         (setq dante-loaded-file fname)
@@ -553,7 +553,7 @@ Note that sub-sessions are not interleaved."
   :type (cons 'set (--map (list 'const :tag (concat (car it) ": " (cadr it)) (car it))
                           '(("+c" "Gather type information (necessary for `dante-type-at')")
                             ("-Wall" "Report all warnings")
-                            ("-fdefer-type-holes" "Accept typed holes, so that completion/type-at continues to work then.")
+                            ("-fdefer-typed-holes" "Accept typed holes, so that completion/type-at continues to work then.")
                             ("-fdefer-type-errors" "Accept incorrectly typed programs, so that completion/type-at continues to work then. (However errors in dependencies won't be detected as such)")
                             ("-fno-diagnostics-show-caret" "Cleaner error messages for GHC >=8.2 (ignored by earlier versions)")))))
 
