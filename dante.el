@@ -489,7 +489,7 @@ x:\\foo\\bar (i.e., Windows)."
 
 (defun dante--ghc-subexp (reg)
   "Format the subexpression denoted by REG for GHCi commands."
-  (pcase reg (`(,beg . (,end . nil))
+  (pcase reg (`(,beg ,end)
               (format "%S %d %d %d %d %s"
                       (dante-temp-file-name (current-buffer))
                       (line-number-at-pos beg)
@@ -521,7 +521,7 @@ x:\\foo\\bar (i.e., Windows)."
     (car result)))
 
 (defun dante-restart ()
-  "Restart GHCi with the same configuration as before."
+  "Restart GHCi with the same configuration (root, command line) as before."
   (interactive)
   (when (dante-buffer-p)
     (dante-destroy)
