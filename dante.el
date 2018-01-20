@@ -281,12 +281,13 @@ The continuation must call its first argument; see `dante-session'."
       (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0))
     (dante-cps-let (((buffer done) (dante-session))
                     (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
-                    (_ (dante-async-write buffer (if (string-equal (buffer-local-value 'dante-loaded-file buffer) fname)
+                    (_ (dante-async-write buffer (if (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)
                                                      ":r" (concat ":l " (dante-local-name fname)))))
                     ((status err-messages loaded-modules) (dante-async-with-buffer buffer (apply-partially 'dante-load-loop "" nil))))
-      (let ((load-msg (with-current-buffer buffer
-                        (setq dante-loaded-file fname)
-                        (if (and unchanged (eq status 'ok)) dante-load-message
+      (let* ((same-buffer (s-equals? dante-loaded-file fname)) ;; todo: factor
+             (load-msg (with-current-buffer buffer
+                         (setq dante-loaded-file fname)
+                        (if (and unchanged same-buffer (eq status 'ok)) dante-load-message
                           (setq dante-load-message err-messages)))))
         ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
         (with-current-buffer source-buffer (funcall cont done load-msg))))))
