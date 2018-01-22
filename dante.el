@@ -680,7 +680,7 @@ This is a standard process sentinel function."
   (if buffer
       (with-current-buffer buffer
         (s-join "\n" (--map (format "%s %S" it (eval it))
-                            '(default-directory dante-command-line dante-state dante-queue dante-callback dante-load-message))))
+                            '(default-directory dante-command-line dante-state dante-queue dante-callback dante-loaded-file dante-load-message))))
     (format "No GHCi interaction buffer")))
 
 (defun dante-show-process-problem (process change)
@@ -976,9 +976,9 @@ a list is returned instead of failing with a nil result."
             (let ((type-expr (match-string 1 msg)))
             (apply #'delete-region (dante-ident-pos-at-point))
             (insert (concat "(" type-expr ")"))))
-           ((--any? (string-match it msg) dante-suggestible-extensions)
+           ((--any? (s-matches? it msg) dante-suggestible-extensions)
             (goto-char 1)
-            (insert (concat "{-# LANGUAGE " (car (--filter (string-match it msg) dante-suggestible-extensions)) " #-}\n")))
+            (insert (concat "{-# LANGUAGE " (--first (s-matches? it msg) dante-suggestible-extensions) " #-}\n")))
            (t (error "Cannot fix the issue at point automatically")))
           (when (looking-back "[ \t]" (line-beginning-position))
             (delete-region (point) (+ (point) (skip-chars-forward " \t")))))))))
