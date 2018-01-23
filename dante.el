@@ -260,11 +260,11 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
     (unless unchanged ; so GHCi's :r may be a no-op; save some time if remote
       (setq dante-temp-epoch epoch)
       (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0))
-    (lcr-cps-let (((buffer) (dante-session))
-                    (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
-                    (_ (dante-async-write buffer (if (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)
+    (lcr-cps-let ((buffer (dante-session))
+                  (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
+                  (_ (dante-async-write buffer (if (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)
                                                      ":r" (concat ":l " (dante-local-name fname)))))
-                    ((status err-messages loaded-modules) (dante-async-with-buffer buffer (apply-partially 'dante-load-loop "" nil))))
+                  ((status err-messages loaded-modules) (dante-async-with-buffer buffer (apply-partially 'dante-load-loop "" nil))))
       (let* ((same-buffer (s-equals? dante-loaded-file fname)) ;; todo: factor
              (load-msg (with-current-buffer buffer
                          (setq dante-loaded-file fname)
@@ -498,24 +498,14 @@ x:\\foo\\bar (i.e., Windows)."
   (interactive)
   (when (dante-buffer-p)
     (dante-destroy)
-    (lcr-cps-let (((_buffer) (dante-session))))))
-
-(defun dante-session (cont)
-  "Run the CONT in a valid GHCi session for the current (source) buffer.
-CONT is called as (CONT ghci-buffer)."
-  (dante-async-with-buffer (or (dante-buffer-p) (dante-start)) #'dante-async-yield cont))
+    (lcr-cps-let ((_ (dante-session))))))
 
 (defun dante-session (continue)
   "Start a GHCi session and CONTINUE.  (`lcr')."
   (lcr-context-switch
       (with-current-buffer (or (dante-buffer-p) (dante-start))
-        (push (lambda () (lcr-resume continue ())) dante-queue)
+        (push (lambda (buffer) (lcr-resume continue buffer)) dante-queue)
         (dante-schedule-next (current-buffer)))))
-
-(defun dante-async-yield (cont)
-  "Run CONT when GHCi becomes available for executing a session."
-  (push cont dante-queue)
-  (dante-schedule-next (current-buffer)))
 
 (defun dante-schedule-next (buffer)
   "If GHCi is idle, run the next queued GHCi sub-session for BUFFER, if any.
@@ -568,11 +558,12 @@ Note that sub-sessions are not interleaved."
 
 (defun dante-async-read (cont)
   "Install CONT as a callback for an unknown portion GHCi output.
-Called in process buffer."
+Must be called from GHCi process buffer."
     (when dante-callback
       (error "Try to set a callback (%s), but one exists already! (%s)" cont dante-callback))
-    (setq dante-callback cont)
-    (force-mode-line-update t))
+    (lcr-context-switch
+      (setq dante-callback (lambda (input) (lcr-resume cont input)))
+    (force-mode-line-update t)))
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
 (defun dante-wait-for-prompt (acc cont)
