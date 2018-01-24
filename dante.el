@@ -566,12 +566,6 @@ Must be called from GHCi process buffer."
     (force-mode-line-update t)))
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
-(defun dante-wait-for-prompt (acc cont)
-  "ACC umulate input until prompt is found and call CONT."
-  (if (string-match dante-ghci-prompt acc)
-      (funcall cont (substring acc 0 (1- (match-beginning 1))) (match-string 1 acc))
-    (lcr-cps-let ((input (dante-async-read)))
-      (dante-wait-for-prompt (concat acc input) cont))))
 
 (defun dante-load-loop (acc err-msgs cont)
   "Parse the output of load command.
@@ -616,14 +610,16 @@ ACC umulate input and ERR-MSGS.  When done call (CONT status error-messages load
                      (save-excursion (goto-char source-marker)
                                      (apply cont e))))))))
 
-(defun dante-async-call (cmd cont)
-  "Send GHCi the command string CMD.
-The response is passed to CONT as (CONT REPLY)."
-  (lcr-cps-let
-      ((_ (dante-async-write (dante-buffer-p) cmd))
-       ((s _) (dante-async-with-buffer (dante-buffer-p) (apply-partially #'dante-wait-for-prompt ""))))
-    (when (memq 'responses dante-debug) (message "GHCi <= %s\n     => %s" cmd s))
-    (funcall cont (s-trim-right s))))
+(deflcr dante-async-call (cmd)
+    "Send GHCi the command string CMD and return the answer."
+    (lcr-call dante-async-write (dante-buffer-p) cmd)
+    (with-current-buffer (dante-buffer-p)
+      (let ((acc "")
+            (matched nil))
+        (while (not matched)
+          (setq acc (concat acc (lcr-call dante-async-read)))
+          (setq matched (string-match dante-ghci-prompt acc)))
+        (s-trim-right (substring acc 0 (1- (match-beginning 1)))))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
