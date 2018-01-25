@@ -265,9 +265,9 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
       (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0))
     (let* ((buffer (lcr-call dante-session))
            (_ (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
-           (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname))
-           (_ (lcr-call dante-async-write buffer (if same-buffer ":r" (concat ":l " (dante-local-name fname))))))
+           (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)))
       (with-current-buffer buffer
+        (dante-async-write (if same-buffer ":r" (concat ":l " (dante-local-name fname))))
         (cl-destructuring-bind (status err-messages _loaded-modules) (lcr-call dante-wait-loaded)
           (setq dante-loaded-file fname)
           ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
@@ -627,16 +627,15 @@ ACC umulate input and ERR-MSGS.  When done call (CONT (list status error-message
   (lcr-cps-let (((status warning-msgs loaded-mods) (dante-load-loop "" nil)))
                (funcall cont (list status warning-msgs loaded-mods))))
 
-(defun dante-async-write (buffer cmd cont)
-  "Write to dante BUFFER the CMD and call CONT."
+(defun dante-async-write (cmd)
+  "Write to GHCi associated with current buffer the CMD."
   (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
-  (process-send-string (get-buffer-process buffer) (concat cmd "\n"))
-  (funcall cont ()))
+  (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n")))
 
 (deflcr dante-async-call (cmd)
     "Send GHCi the command string CMD and return the answer."
-    (lcr-call dante-async-write (dante-buffer-p) cmd)
     (with-current-buffer (dante-buffer-p)
+      (dante-async-write cmd)
       (let ((acc "")
             (matched nil))
         (while (not matched)
