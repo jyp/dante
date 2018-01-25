@@ -250,28 +250,29 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 ;;;;;;;;;;;;;;;;;;;;;
 ;; Flycheck checker
 
-(defun dante-async-load-current-buffer (interpret cont)
-  "Load and maybe INTERPRET the temp file for current buffer and run CONT in a session."
+(defvar-local dante-temp-epoch -1
+  "The value of `buffer-modified-tick' when the contents were
+  last written to `dante-temp-file-name'.")
+
+(deflcr dante-async-load-current-buffer (interpret)
+  "Load and maybe INTERPRET the temp file for current buffer."
 ;; Note that the GHCi doc for :l and :r appears to be wrong. TEST before changing this code.
   (let* ((epoch (buffer-modified-tick))
          (unchanged (equal epoch dante-temp-epoch))
-         (source-buffer (current-buffer))
          (fname (dante-temp-file-name (current-buffer))))
     (unless unchanged ; so GHCi's :r may be a no-op; save some time if remote
       (setq dante-temp-epoch epoch)
       (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0))
-    (lcr-cps-let ((buffer (dante-session))
-                  (_ (dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
-                  (_ (dante-async-write buffer (if (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)
-                                                     ":r" (concat ":l " (dante-local-name fname)))))
-                  ((status err-messages loaded-modules) (dante-async-with-buffer buffer (apply-partially 'dante-load-loop "" nil))))
-      (let* ((same-buffer (s-equals? dante-loaded-file fname)) ;; todo: factor
-             (load-msg (with-current-buffer buffer
-                         (setq dante-loaded-file fname)
-                        (if (and unchanged same-buffer (eq status 'ok)) dante-load-message
-                          (setq dante-load-message err-messages)))))
-        ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
-        (with-current-buffer source-buffer (funcall cont load-msg))))))
+    (let* ((buffer (lcr-call dante-session))
+           (_ (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
+           (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname))
+           (_ (lcr-call dante-async-write buffer (if same-buffer ":r" (concat ":l " (dante-local-name fname))))))
+      (with-current-buffer buffer
+        (cl-destructuring-bind (status err-messages _loaded-modules) (lcr-call dante-wait-loaded)
+          (setq dante-loaded-file fname)
+          ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
+          (if (and unchanged same-buffer (eq status 'ok)) dante-load-message
+            (setq dante-load-message err-messages)))))))
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
@@ -440,10 +441,6 @@ The path returned is canonicalized and stripped of any text properties."
   "Return a (possibly remote) filename suitable to store BUFFER's contents."
   (with-current-buffer buffer
     (or dante-temp-file-name (setq dante-temp-file-name (dante-tramp-make-tramp-temp-file buffer)))))
-
-(defvar-local dante-temp-epoch -1
-  "The value of `buffer-modified-tick' when the contents were
-  last written to `dante-temp-file-name'.")
 
 (defun dante-canonicalize-path (path)
   "Return a standardized version of PATH.
@@ -625,22 +622,16 @@ ACC umulate input and ERR-MSGS.  When done call (CONT (list status error-message
           (t (lcr-cps-let ((input (dante-async-read)))
                (dante-load-loop (concat acc input) err-msgs cont))))))
 
-               
+(defun dante-wait-loaded (cont)
+  "FIXME CONT."
+  (lcr-cps-let (((status warning-msgs loaded-mods) (dante-load-loop "" nil)))
+               (funcall cont (list status warning-msgs loaded-mods))))
 
 (defun dante-async-write (buffer cmd cont)
   "Write to dante BUFFER the CMD and call CONT."
   (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
   (process-send-string (get-buffer-process buffer) (concat cmd "\n"))
   (funcall cont ()))
-
-(defun dante-async-with-buffer (buffer f cont)
-  "Save context, then in BUFFER, cps-call F call CONT with the results of the call in the restored context."
-  (let ((source-marker (point-marker)))
-    (with-current-buffer buffer
-      (funcall f (lambda (&rest e)
-                   (with-current-buffer (marker-buffer source-marker)
-                     (save-excursion (goto-char source-marker)
-                                     (apply cont e))))))))
 
 (deflcr dante-async-call (cmd)
     "Send GHCi the command string CMD and return the answer."
