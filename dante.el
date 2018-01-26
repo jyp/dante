@@ -268,7 +268,7 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
            (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)))
       (with-current-buffer buffer
         (dante-async-write (if same-buffer ":r" (concat ":l " (dante-local-name fname))))
-        (cl-destructuring-bind (status err-messages _loaded-modules) (lcr-call dante-wait-loaded)
+        (cl-destructuring-bind (status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
           (setq dante-loaded-file fname)
           ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
           (if (and unchanged same-buffer (eq status 'ok)) dante-load-message
@@ -564,68 +564,35 @@ Must be called from GHCi process buffer."
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
 
-;; (deflcr dante-load-loop (acc err-msgs)
-;;   "Parse the output of load command.
-;; ACC umulate input and ERR-MSGS."
-;;   (setq dante-state 'loading)
-;;   (let ((success "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\.")
-;;         (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\).*")
-;;         (err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\)\n\\(\\([ ]+.*\n\\)*\\)")
-;;         (result nil))
-;;     (while (not result)
-;;       (let* ((i (string-match (s-join "\\|" (list dante-ghci-prompt success err-regexp progress)) acc))
-;;              (m (when i (match-string 0 acc)))
-;;              (rest (when i (substring acc (match-end 0)))))
-;;         (cond ((and m (string-match dante-ghci-prompt m))
-;;                (setq dante-state 'ghc-reports-error)
-;;                (setq result (list 'failed (nreverse err-msgs) (match-string 1 m))))
-;;               ((and m (string-match progress m))
-;;                (setq dante-state (list 'compiling (match-string 3 m))))
-;;               ((and m (string-match success m))
-;;                ;; With the +c setting, GHC (8.2) prints: 1. error
-;;                ;; messages+warnings, if compiling only 2. if successful,
-;;                ;; repeat the warnings
-;;                (cl-destructuring-bind (_status warning-msgs loaded-mods) (lcr-call dante-load-loop acc nil)
-;;                  (setq dante-state (list 'loaded loaded-mods))
-;;                  (setq result (list 'ok (or (nreverse err-msgs) warning-msgs) loaded-mods))))
-;;               ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
-;;                (push (-take 4 (cdr (s-match err-regexp m))) err-msgs))
-;;               (t (setq rest (concat acc (lcr-call dante-async-read)))))
-;;         (set acc rest)))
-;;     result))
-
-(defun dante-load-loop (acc err-msgs cont)
+(deflcr dante-load-loop (acc err-msgs)
   "Parse the output of load command.
-ACC umulate input and ERR-MSGS.  When done call (CONT (list status error-messages loaded-modules))."
+ACC umulate input and ERR-MSGS."
   (setq dante-state 'loading)
-  (let* ((success "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\.")
-         (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\).*")
-         (err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\)\n\\(\\([ ]+.*\n\\)*\\)")
-         (i (string-match (s-join "\\|" (list dante-ghci-prompt success err-regexp progress)) acc))
-         (m (when i (match-string 0 acc)))
-         (rest (when i (substring acc (match-end 0)))))
-    (cond ((and m (string-match dante-ghci-prompt m))
-           (setq dante-state 'ghc-reports-error)
-           (funcall cont 'failed (nreverse err-msgs) (match-string 1 m)))
-          ((and m (string-match progress m))
-           (setq dante-state (list 'compiling (match-string 3 m)))
-           (dante-load-loop rest err-msgs cont))
-          ((and m (string-match success m))
-           ;; With the +c setting, GHC (8.2) prints: 1. error
-           ;; messages+warnings, if compiling only 2. if successful,
-           ;; repeat the warnings
-           (lcr-cps-let (((_status warning-msgs loaded-mods) (dante-load-loop rest nil)))
-             (setq dante-state (list 'loaded loaded-mods))
-             (funcall cont 'ok (or (nreverse err-msgs) warning-msgs) loaded-mods)))
-          ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
-           (dante-load-loop rest (cons (-take 4 (cdr (s-match err-regexp m))) err-msgs) cont))
-          (t (lcr-cps-let ((input (dante-async-read)))
-               (dante-load-loop (concat acc input) err-msgs cont))))))
-
-(defun dante-wait-loaded (cont)
-  "FIXME CONT."
-  (lcr-cps-let (((status warning-msgs loaded-mods) (dante-load-loop "" nil)))
-               (funcall cont (list status warning-msgs loaded-mods))))
+  (let ((success "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\.")
+        (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\).*")
+        (err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\)\n\\(\\([ ]+.*\n\\)*\\)")
+        (result nil))
+    (while (not result)
+      (let* ((i (string-match (s-join "\\|" (list dante-ghci-prompt success err-regexp progress)) acc))
+             (m (when i (match-string 0 acc)))
+             (rest (when i (substring acc (match-end 0)))))
+        (cond ((and m (string-match dante-ghci-prompt m))
+               (setq dante-state 'ghc-reports-error)
+               (setq result (list 'failed (nreverse err-msgs) (match-string 1 m))))
+              ((and m (string-match progress m))
+               (setq dante-state (list 'compiling (match-string 3 m))))
+              ((and m (string-match success m))
+               ;; With the +c setting, GHC (8.2) prints: 1. error
+               ;; messages+warnings, if compiling only 2. if successful,
+               ;; repeat the warnings
+               (cl-destructuring-bind (_status warning-msgs loaded-mods) (lcr-call dante-load-loop rest nil)
+                 (setq dante-state (list 'loaded loaded-mods))
+                 (setq result (list 'ok (or (nreverse err-msgs) warning-msgs) loaded-mods))))
+              ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
+               (push (-take 4 (cdr (s-match err-regexp m))) err-msgs))
+              (t (setq rest (concat acc (lcr-call dante-async-read)))))
+        (setq acc rest)))
+    result))
 
 (defun dante-async-write (cmd)
   "Write to GHCi associated with current buffer the CMD."
