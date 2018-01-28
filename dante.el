@@ -135,10 +135,13 @@ will be returned.  Otherwise, use
 
 (defun dante-status ()
   "Return dante's status for the current source buffer."
-  (s-join ":"
-   (-non-nil (list (format "%s" (dante-get-var 'dante-state))
-                   (when (dante-get-var 'dante-callback)
-                     (format "busy(%s)" (1+ (length (dante-get-var 'dante-queue)))))))))
+  (let ((buf (dante-buffer-p)))
+    (if (not buf) ("stopped")
+      (with-current-buffer buf
+        (s-join ":"
+           (-non-nil
+            (list (format "%s" dante-state)
+                  (when dante-callback (format "busy(%s)" (1+ (length dante-queue)))))))))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
@@ -255,7 +258,7 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
   "The value of `buffer-modified-tick' when the contents were
   last written to `dante-temp-file-name'.")
 
-(deflcr dante-async-load-current-buffer (interpret)
+(lcr-def dante-async-load-current-buffer (interpret)
   "Load and maybe INTERPRET the temp file for current buffer."
 ;; Note that the GHCi doc for :l and :r appears to be wrong. TEST before changing this code.
   (let* ((epoch (buffer-modified-tick))
@@ -565,7 +568,7 @@ Must be called from GHCi process buffer."
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
 
-(deflcr dante-load-loop (acc err-msgs)
+(lcr-def dante-load-loop (acc err-msgs)
   "Parse the output of load command.
 ACC umulate input and ERR-MSGS."
   (setq dante-state 'loading)
@@ -600,7 +603,7 @@ ACC umulate input and ERR-MSGS."
   (when (memq 'outputs dante-debug) (message "[Dante] -> %s" cmd))
   (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n")))
 
-(deflcr dante-async-call (cmd)
+(lcr-def dante-async-call (cmd)
     "Send GHCi the command string CMD and return the answer."
     (with-current-buffer (dante-buffer-p)
       (dante-async-write cmd)
