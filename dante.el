@@ -136,12 +136,12 @@ will be returned.  Otherwise, use
 (defun dante-status ()
   "Return dante's status for the current source buffer."
   (let ((buf (dante-buffer-p)))
-    (if (not buf) ("stopped")
+    (if (not buf) "stopped"
       (with-current-buffer buf
         (s-join ":"
            (-non-nil
             (list (format "%s" dante-state)
-                  (when dante-callback (format "busy(%s)" (1+ (length dante-queue)))))))))))
+                  (when lcr-process-callback (format "busy(%s)" (1+ (length dante-queue)))))))))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
@@ -176,7 +176,6 @@ if the argument is omitted or nil or a positive integer).
 (defvar-local dante-load-message nil "load messages")
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 (defvar-local dante-queue nil "List of ready GHCi queries.")
-(defvar-local dante-callback nil "Callback waiting for output.")
 (defvar-local dante-package-name nil "The package name associated with the current buffer.")
 (defvar-local dante-state nil
   "nil: initial state
@@ -236,7 +235,7 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
   (let ((package (dante-package-name))
         (help-xref-following nil)
         (origin (buffer-name)))
-    (lcr-cps-let (((_load-message) (dante-async-load-current-buffer t))
+    (lcr-cps-let ((_load-message (dante-async-load-current-buffer t))
                     (info (dante-async-call (format ":i %s" ident))))
       (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                        (called-interactively-p 'interactive))
@@ -512,7 +511,7 @@ x:\\foo\\bar (i.e., Windows)."
   "If GHCi is idle, run the next queued GHCi sub-session for BUFFER, if any.
 Note that sub-sessions are not interleaved."
   (with-current-buffer buffer
-    (if dante-callback (force-mode-line-update t)
+    (if lcr-process-callback (force-mode-line-update t)
       (let ((req (pop dante-queue)))
         (when req (funcall req buffer))))))
 
@@ -543,28 +542,18 @@ Note that sub-sessions are not interleaved."
           ((_start-messages
             (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
         (dante-set-state 'running))
-      (set-process-filter
-       process
-       (lambda (_process string)
-         (when (memq 'inputs dante-debug) (message "[Dante] <- %s" string))
-         (when (buffer-live-p buffer)
-           (with-current-buffer buffer
-             (let ((callback dante-callback))
-               (unless callback (error "Received output in %s (%s) but no callback is installed" (current-buffer) string))
-               (setq dante-callback nil)
-               (funcall callback (s-replace "\r" "" string))
-               (dante-schedule-next buffer))))))
+      (lcr-process-initialize buffer)
       (set-process-sentinel process 'dante-sentinel)
       buffer))
 
 (defun dante-async-read (cont)
   "Install CONT as a callback for an unknown portion GHCi output.
 Must be called from GHCi process buffer."
-    (when dante-callback
-      (error "Try to set a callback (%s), but one exists already! (%s)" cont dante-callback))
-    (lcr-context-switch
-      (setq dante-callback (lambda (input) (lcr-resume cont input)))
-    (force-mode-line-update t)))
+  (let ((buffer (current-buffer)))
+    (lcr-cps-let ((input (lcr-process-read buffer)))
+      (when (memq 'inputs dante-debug) (message "[Dante] <- %s" input)) 
+      (funcall cont (s-replace "\r" "" input))))
+  (force-mode-line-update t))
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
 
@@ -637,7 +626,7 @@ This is a standard process sentinel function."
   (if buffer
       (with-current-buffer buffer
         (s-join "\n" (--map (format "%s %S" it (eval it))
-                            '(default-directory dante-command-line dante-state dante-queue dante-callback dante-loaded-file dante-load-message))))
+                            '(default-directory dante-command-line dante-state dante-queue dante-loaded-file dante-load-message lcr-process-callback))))
     (format "No GHCi interaction buffer")))
 
 (defun dante-show-process-problem (process change)
