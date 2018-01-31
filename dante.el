@@ -100,12 +100,12 @@ otherwise look for a .cabal file, or use the current dir."
 (defcustom dante-repl-command-line-methods-alist
   `((styx  . ,(lambda (root) (dante-repl-by-file root '("styx.yaml") '("styx" "repl" dante-target))))
     (nix   . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
-                                                      '("nix-shell" "--run" (if dante-target (concat "cabal repl " dante-target) "cabal repl")))))
+                                                      '("nix-shell" "--run" (concat "cabal repl " (or dante-target ""))) " --builddir=dist/dante")))
     (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl" dante-target))))
     (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl" dante-target))))
     (new-build . ,(lambda (root) (when (or (directory-files root nil ".*\\.cabal$") (file-exists-p "cabal.project"))
-                                   '("cabal" "new-repl" dante-target))))
-    (bare  . ,(lambda (_) '("cabal" "repl" dante-target))))
+                                   '("cabal" "new-repl" dante-target "--builddir=dist/dante"))))
+    (bare  . ,(lambda (_) '("cabal" "repl" dante-target "--builddir=dist/dante"))))
 "GHCi launch command lines.
 This is an alist from method name to a function taking the root
 directory and returning either a command line or nil if the
