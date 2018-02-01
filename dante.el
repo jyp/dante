@@ -553,7 +553,8 @@ Must be called from GHCi process buffer."
   (let ((buffer (current-buffer)))
     (lcr-cps-let ((input (lcr-process-read buffer)))
       (when (memq 'inputs dante-debug) (message "[Dante] <- %s" input)) 
-      (funcall cont (s-replace "\r" "" input))))
+      (funcall cont (s-replace "\r" "" input))
+      (dante-schedule-next buffer)))
   (force-mode-line-update t))
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
