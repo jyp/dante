@@ -258,24 +258,28 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
   last written to `dante-temp-file-name'.")
 
 (lcr-def dante-async-load-current-buffer (interpret)
-  "Load and maybe INTERPRET the temp file for current buffer."
-;; Note that the GHCi doc for :l and :r appears to be wrong. TEST before changing this code.
+  "Load and maybe INTERPRET the temp file for current buffer.
+Interpreting puts all symbols from the current module in
+scope. Compiling to avoids re-interpreting the dependencies over
+and over."
   (let* ((epoch (buffer-modified-tick))
          (unchanged (equal epoch dante-temp-epoch))
-         (fname (dante-temp-file-name (current-buffer))))
-    (unless unchanged ; so GHCi's :r may be a no-op; save some time if remote
+         (fname (dante-temp-file-name (current-buffer)))
+         (buffer (lcr-call dante-session))
+         (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)))
+    (unless unchanged ; small optimisation
       (setq dante-temp-epoch epoch)
       (write-region nil nil (dante-temp-file-name (current-buffer)) nil 0))
-    (let* ((buffer (lcr-call dante-session))
-           (_ (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code")))
-           (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)))
+    (if (and unchanged same-buffer) (buffer-local-value 'dante-load-message buffer) ; see #52
+      ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
+      (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
       (with-current-buffer buffer
-        (dante-async-write (if same-buffer ":r" (concat ":l " (dante-local-name fname))))
+        (dante-async-write (if (and (not interpret) same-buffer) ":r"
+                             (concat ":l " (if interpret "*" "") (dante-local-name fname))))
         (cl-destructuring-bind (status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
           (setq dante-loaded-file fname)
-          ;; when no write was done, then GHCi does not repeat the warnings. So, we spit back the previous load messages.
-          (if (and unchanged same-buffer (eq status 'ok)) dante-load-message
-            (setq dante-load-message err-messages)))))))
+          (setq dante-load-message err-messages))))))
+
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
