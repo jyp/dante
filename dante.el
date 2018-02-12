@@ -12,7 +12,7 @@
 ;; Created: October 2016
 ;; Keywords: haskell, tools
 ;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (haskell-mode "13.14") (s "1.11.0") (lcr "0.9"))
-;; Version: 
+;; Version:
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -556,7 +556,7 @@ Note that sub-sessions are not interleaved."
 Must be called from GHCi process buffer."
   (let ((buffer (current-buffer)))
     (lcr-cps-let ((input (lcr-process-read buffer)))
-      (when (memq 'inputs dante-debug) (message "[Dante] <- %s" input)) 
+      (when (memq 'inputs dante-debug) (message "[Dante] <- %s" input))
       (funcall cont (s-replace "\r" "" input))
       (dante-schedule-next buffer)))
   (force-mode-line-update t))
