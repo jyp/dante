@@ -167,7 +167,7 @@ if the argument is omitted or nil or a positive integer).
 
 (define-key dante-mode-map (kbd "C-c .") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c ,") 'dante-info)
-(define-key dante-mode-map (kbd "C-c /") 'dante-auto-fix)
+(define-key dante-mode-map (kbd "C-c /") 'attrap-attrap) ;; deprecated keybinding
 (define-key dante-mode-map (kbd "C-c \"") 'dante-eval-block)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -820,118 +820,6 @@ a list is returned instead of failing with a nil result."
 ;;           )))))
 ;; (when dante-timer (cancel-timer dante-timer))
 ;; (setq dante-timer (run-with-idle-timer 1 t #'dante-idle-function))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Auto-fix
-
-(defcustom dante-suggestible-extensions
-  '("AllowAmbiguousTypes" "BangPatterns" "ConstraintKinds" "DataKinds" "DeriveFoldable" "DeriveFunctor" "DeriveGeneric" "DeriveTraversable" "EmptyCase" "FlexibleContexts" "FlexibleInstances" "FunctionalDependencies" "GADTs" "GeneralizedNewtypeDeriving" "InstanceSigs" "KindSignatures" "MultiParamTypeClasses" "PartialTypeSignatures" "PatternSynonyms" "PolyKinds" "RankNTypes" "RecordWildCards" "ScopedTypeVariables" "StandaloneDeriving" "TransformListComp" "TupleSections" "TypeApplications" "TypeFamilies" "TypeInType" "TypeOperators" "TypeSynonymInstances" "UndecidableSuperClasses" "UndecidableInstances" "ViewPatterns" )
-  "Language extensions that Dante can use to fix errors."
-  :group 'dante
-  :type '(repeat string))
-
-(defun dante-auto-fix (pos)
-  "Attempt to fix the flycheck error or warning at POS."
-  (interactive "d")
-  (let ((messages (delq nil (mapcar #'flycheck-error-message
-                                    (flycheck-overlay-errors-at pos)))))
-    (when messages
-      (let ((msg (car messages)))
-        (save-excursion
-          (cond ;; use (set-selective-display 12) to see an outline of all possible matches
-           ((string-match "Redundant constraints?: (?\\([^,)\n]*\\)" msg)
-            (let ((constraint (match-string 1 msg)))
-              (search-forward constraint) ; find type sig
-              (delete-region (match-beginning 0) (match-end 0))
-              (when (looking-at "[ \t]*,")
-                (delete-region (point) (search-forward ",")))
-              (when (looking-at "[ \t]*=>")
-                (delete-region (point) (search-forward "=>")))))
-           ((string-match "The type signature for ‘\\(.*\\)’[ \t\n]*lacks an accompanying binding" msg)
-            (beginning-of-line)
-            (forward-line)
-            (insert (concat (match-string 1 msg) " = _\n")))
-           ((string-match "add (\\(.*\\)) to the context of[\n ]*the type signature for:[ \n]*\\([^ ]*\\) ::" msg)
-            (let ((missing-constraint (match-string 1 msg))
-                  (function-name (match-string 2 msg)))
-              (search-backward-regexp (concat (regexp-quote function-name) "[ \t]*::[ \t]*" )) ; find type sig
-              (goto-char (match-end 0))
-              (when (looking-at "forall\\|∀") ; skip quantifiers
-                (search-forward "."))
-              (skip-chars-forward "\n\t ") ; skip spaces
-              (insert (concat missing-constraint " => "))))
-           ((string-match "Unticked promoted constructor" msg)
-            (goto-char (car (dante-ident-pos-at-point)))
-            (insert "'"))
-           ((string-match "Patterns not matched:" msg)
-            (let ((patterns (mapcar #'string-trim (split-string (substring msg (match-end 0)) "\n" t " ")))) ;; patterns to match
-            (if (string-match "In an equation for ‘\\(.*\\)’:" msg)
-                (let ((function-name (match-string 1 msg)))
-                  (end-of-line)
-                  (dolist (pattern patterns)
-                    (insert (concat "\n" function-name " " pattern " = _"))))
-              (end-of-line) ;; assuming that the case expression is on multiple lines and that "of" is at the end of the line
-              (dolist (pattern patterns)
-                (haskell-indentation-newline-and-indent)
-                (insert (concat pattern " -> _"))))))
-           ((string-match "A do-notation statement discarded a result of type" msg)
-            (goto-char (car (dante-ident-pos-at-point)))
-            (insert "_ <- "))
-           ((string-match "Failed to load interface for ‘\\(.*\\)’\n[ ]*Perhaps you meant[ \n]*\\([^ ]*\\)" msg)
-            (let ((replacement (match-string 2 msg)))
-              ;; ^^ delete-region may garble the matches
-              (search-forward (match-string 1 msg))
-              (delete-region (match-beginning 0) (point))
-              (insert replacement)))
-           ((string-match "Perhaps you want to add ‘\\(.*\\)’ to the import list[\n\t ]+in the import of[ \n\t]*‘.*’[\n\t ]+([^:]*:\\([0-9]*\\):[0-9]*-\\([0-9]*\\))" msg)
-            (let ((missing (match-string 1 msg))
-                  (line (string-to-number (match-string 2 msg)))
-                  (end-col (string-to-number (match-string 3 msg))))
-              (goto-char (point-min))
-              (forward-line (1- line))
-              (move-to-column (1- end-col))
-              (skip-chars-backward " \t")
-              (unless (looking-back "(" (- (point) 2)) (insert ","))
-              (insert missing)))
-           ((string-match "Perhaps you meant ‘\\([^‘]*\\)’" msg)
-            (let ((replacement (match-string 1 msg)))
-              ;; ^^ delete-region may garble the matches
-              (apply #'delete-region (dante-ident-pos-at-point))
-              (insert replacement)))
-           ((string-match "Perhaps you meant one of these:" msg)
-            (let* ((replacements
-                    (-map (lambda (r)
-                            (string-match "‘\\(.*\\)’ (line [0-9]*)" r)
-                            (match-string 1 r))
-                          (split-string (substring msg (match-end 0)) "," t " ")))
-                   (replacement (completing-read "replacement: " replacements)))
-              (apply #'delete-region (dante-ident-pos-at-point))
-              (insert replacement)))
-           ((string-match "\\(Top-level binding\\|Pattern synonym\\) with no type signature:[\n ]*" msg)
-            (beginning-of-line)
-            (insert (concat (substring msg (match-end 0)) "\n")))
-           ((string-match "Defined but not used" msg)
-            (goto-char (car (dante-ident-pos-at-point)))
-            (insert "_"))
-           ((string-match "Unused quantified type variable ‘\\(.*\\)’" msg)
-            ;; note there can be a kind annotation, not just a variable.
-            (delete-region (point) (+ (point) (- (match-end 1) (match-beginning 1)))))
-           ((string-match "The import of ‘[^’]*’ is redundant" msg)
-            (beginning-of-line)
-            (delete-region (point) (progn (next-logical-line) (point))))
-           ((string-match "The import of ‘\\(.*\\)’ from ‘[^’]*’ is redundant" msg)
-            (let ((redundant (match-string 1 msg)))
-              (search-forward redundant)))
-           ((string-match "Found type wildcard ‘.*’[ \t\n]*standing for ‘\\(.*\\)’" msg)
-            (let ((type-expr (match-string 1 msg)))
-            (apply #'delete-region (dante-ident-pos-at-point))
-            (insert (concat "(" type-expr ")"))))
-           ((--any? (s-matches? it msg) dante-suggestible-extensions)
-            (goto-char 1)
-            (insert (concat "{-# LANGUAGE " (--first (s-matches? it msg) dante-suggestible-extensions) " #-}\n")))
-           (t (error "Cannot fix the issue at point automatically")))
-          (when (looking-back "[ \t]" (line-beginning-position))
-            (delete-region (point) (+ (point) (skip-chars-forward " \t")))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
