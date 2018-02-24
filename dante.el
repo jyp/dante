@@ -512,8 +512,9 @@ x:\\foo\\bar (i.e., Windows)."
         (dante-schedule-next (current-buffer)))))
 
 (defun dante-schedule-next (buffer)
-  "If GHCi is idle, run the next queued GHCi sub-session for BUFFER, if any.
+  "If no sub-session is running, run the next queued sub-session for BUFFER, if any.
 Note that sub-sessions are not interleaved."
+  (lcr-scheduler)
   (with-current-buffer buffer
     (if lcr-process-callback (force-mode-line-update t)
       (let ((req (pop dante-queue)))
