@@ -17,7 +17,7 @@ comparison).
 | Company completion                      | company-mode          |            |
 | Type of selection                       | dante-type-at         | C-c .      |
 | Info at point                           | dante-info            | C-c ,      |
-| Apply Ghc suggestion for error at point | dante-auto-fix        | C-c /      |
+| Apply Ghc suggestion for error at point | attrap-attrap         | C-c /      |
 | Goto definition                         | xref-find-definitions | M-.        |
 | Find uses                               | xref-find-references  | M-?        |
 | REPLoid (*)                             | dante-eval-block      | C-c "      |
