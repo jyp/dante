@@ -557,7 +557,9 @@ Note that sub-sessions are not interleaved."
 Must be called from GHCi process buffer."
   (let ((buffer (current-buffer)))
     (lcr-cps-let ((input (lcr-process-read buffer)))
-      (when (memq 'inputs dante-debug) (message "[Dante] <- %s" input))
+      (when (memq 'inputs dante-debug)
+          (goto-char (point-max))
+          (insert input))
       (funcall cont (s-replace "\r" "" input))
       (dante-schedule-next buffer)))
   (force-mode-line-update t))
