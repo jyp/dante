@@ -77,12 +77,16 @@ Customize as a file or directory variable."
   :group 'dante
   :type '(choice (const nil) string))
 
+(put 'dante-project-root 'safe-local-variable #'stringp)
+
 (defcustom dante-target nil
   "The target to demand from cabal repl, as a string or nil.
 Customize as a file or directory variable.  Different targets
 will be in different GHCi sessions."
   :group 'dante
   :type '(choice (const nil) string))
+
+(put 'dante-target 'safe-local-variable #'stringp)
 
 (defun dante-project-root ()
   "Get the root directory for the project.
