@@ -535,9 +535,7 @@ Note that sub-sessions are not interleaved."
   (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
          (buffer (dante-buffer-create))
          (process (with-current-buffer buffer
-                    (when (memq 'command-line dante-debug)
-                      (message "GHCi command line: %s" (combine-and-quote-strings args)))
-                    (message "Dante: Starting GHCi ...")
+                    (message "Dante: Starting GHCi: %s" (combine-and-quote-strings args))
                     (apply #'start-file-process "dante" buffer args))))
       (set-process-query-on-exit-flag process nil)
       (with-current-buffer buffer
