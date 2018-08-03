@@ -211,12 +211,15 @@ You can use this to kill them or look inside."
   "Return a haskell-fontified version of EXPRESSION.
 If `haskell-mode' is not loaded, just return EXPRESSION."
   (if (fboundp 'haskell-mode)
+      ;; From https://github.com/lunaryorn/ansible-doc.el/blob/master/ansible-doc.el#L211
+      ;; See also http://emacs.stackexchange.com/a/5408/227
       (with-temp-buffer
-        (let ((haskell-mode-hook nil)) ;; to keep switching mode cheap
+        (insert expression)
+        (delay-mode-hooks
           (haskell-mode)
-          (insert expression)
-          (font-lock-ensure)
-          (buffer-string)))
+          (font-lock-mode))
+        (font-lock-ensure)
+        (buffer-string))
     expression))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
