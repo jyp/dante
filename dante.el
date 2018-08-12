@@ -334,33 +334,33 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Company integration (auto-completion)
 
-(lcr-def dante-complete ()
-  (let ((imports (--filter (s-prefix? "import") (s-lines (buffer-string)))))
+(lcr-def dante-complete (prefix)
+  (let ((imports (--filter (s-prefix? "import" it) (s-lines (buffer-string)))))
     (lcr-call dante-async-load-current-buffer nil)
     (dolist (i imports)
-      (lcr-call dante-async-call i)) ;; the file probably won't load when trying to complete. So, load all the imports instead.
-    (let* ((reply (dante-async-call (format ":complete repl %S" prefix)))
+      (lcr-call dante-async-call (car imports))) ;; the file probably won't load when trying to complete. So, load all the imports instead.
+    (let* ((reply (lcr-call dante-async-call (format ":complete repl %S" prefix)))
            (lines (s-lines reply))
            (common (nth 2 (read (concat "(" (car lines) ")")))))
       (--map (replace-regexp-in-string "\\\"" "" (concat common it)) (cdr lines)))))
 
-(defun dante-company (command &optional _arg &rest _ignored)
+(defun dante-company (command &optional arg &rest _ignored)
   "Company backend for dante.
 See ``company-backends'' for the meaning of COMMAND and _ARGS."
-  (let ((prefix (when (and dante-mode (dante-ident-pos-at-point))
-                  (let* ((id-start (car (dante-ident-pos-at-point)))
-                         (_ (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
-                         (import-end (match-end 0))
-                         (import-start (match-beginning 0))
-                         (is-import (eq import-end id-start)))
-                    (buffer-substring-no-properties (if is-import import-start id-start) (point)))))) ;; todo: pref len
+  (let ((prefix )) ;; todo: pref len
     (cl-case command
       (interactive (company-begin-backend 'dante-company))
       (sorted t)
-      (prefix prefix)
+      (prefix (when (and dante-mode (dante-ident-pos-at-point))
+                (let* ((id-start (car (dante-ident-pos-at-point)))
+                       (_ (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
+                       (import-end (match-end 0))
+                       (import-start (match-beginning 0))
+                       (is-import (eq import-end id-start)))
+                  (buffer-substring-no-properties (if is-import import-start id-start) (point)))))
       (candidates
        (unless (eq (dante-get-var 'dante-state) 'dead)
-         (cons :async dante-complete))))))
+         (cons :async (apply-partially 'dante-complete arg)))))))
 
 (with-eval-after-load 'company
   (add-to-list 'company-backends 'dante-company))
