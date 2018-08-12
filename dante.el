@@ -334,6 +334,16 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Company integration (auto-completion)
 
+(lcr-def dante-complete ()
+  (let ((imports (--filter (s-prefix? "import") (s-lines (buffer-string)))))
+    (lcr-call dante-async-load-current-buffer nil)
+    (dolist (i imports)
+      (lcr-call dante-async-call i)) ;; the file probably won't load when trying to complete. So, load all the imports instead.
+    (let* ((reply (dante-async-call (format ":complete repl %S" prefix)))
+           (lines (s-lines reply))
+           (common (nth 2 (read (concat "(" (car lines) ")")))))
+      (--map (replace-regexp-in-string "\\\"" "" (concat common it)) (cdr lines)))))
+
 (defun dante-company (command &optional _arg &rest _ignored)
   "Company backend for dante.
 See ``company-backends'' for the meaning of COMMAND and _ARGS."
@@ -350,13 +360,7 @@ See ``company-backends'' for the meaning of COMMAND and _ARGS."
       (prefix prefix)
       (candidates
        (unless (eq (dante-get-var 'dante-state) 'dead)
-         (cons :async
-               (lambda (ret)
-                 (lcr-cps-let ((_load_messages (dante-async-load-current-buffer nil))
-                               (reply (dante-async-call (format ":complete repl %S" prefix))))
-                   (let* ((lines (s-lines reply))
-                          (common (nth 2 (read (concat "(" (car lines) ")")))))
-                     (funcall ret (--map (replace-regexp-in-string "\\\"" "" (concat common it)) (cdr lines))))))))))))
+         (cons :async dante-complete))))))
 
 (with-eval-after-load 'company
   (add-to-list 'company-backends 'dante-company))
