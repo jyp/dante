@@ -341,7 +341,7 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
   (let ((imports (--filter (s-prefix? "import" it) (s-lines (buffer-string)))))
     (lcr-call dante-async-load-current-buffer nil)
     (dolist (i imports)
-      (lcr-call dante-async-call (car imports))) ;; the file probably won't load when trying to complete. So, load all the imports instead.
+      (lcr-call dante-async-call i)) ;; the file probably won't load when trying to complete. So, load all the imports instead.
     (let* ((reply (lcr-call dante-async-call (format ":complete repl %S" prefix)))
            (lines (s-lines reply))
            (common (nth 2 (read (concat "(" (car lines) ")")))))
