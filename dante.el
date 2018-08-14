@@ -123,15 +123,30 @@ variable."
 
 (defvar dante-command-line "command line used to start GHCi")
 
+(defvar dante-repl-command-line-method nil
+  "The key in `dante-repl-command-line-methods-alist' to try preferentially.
+
+Consider setting this variable as a directory variable for
+projects that support multiple build systems in order to choose
+one for use with `dante-mode'.")
+
 (defun dante-repl-command-line ()
   "Return the command line for running GHCi.
 If the custom variable `dante-repl-command-line' is non-nil, it
-will be returned.  Otherwise, use
-`dante-repl-command-line-methods-alist'."
+will be returned.  If the variable
+`dante-repl-command-line-method' is non-nil and has an
+association in `dante-repl-command-line-methods-alist', the
+corresponding method is used.  Otherwise, the methods in
+`dante-repl-command-line-methods-alist' will be tried in order
+until one succeeds."
   (or dante-repl-command-line
       (let ((root (dante-project-root)))
-        (--first it (--map (funcall (cdr it) root)
-                           dante-repl-command-line-methods-alist)))))
+        (or (and dante-repl-command-line-method
+                 (let ((method (assoc dante-repl-command-line-method
+                                      dante-repl-command-line-methods-alist)))
+                   (and method (funcall (cdr method) root))))
+            (--first it (--map (funcall (cdr it) root)
+                               dante-repl-command-line-methods-alist))))))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
 
