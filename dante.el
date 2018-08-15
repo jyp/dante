@@ -145,6 +145,7 @@ will be returned.  Otherwise, use
       (with-current-buffer buf
         (if lcr-process-callback (format "busy(%s)" (1+ (length dante-queue)))
           (pcase dante-state
+            (`(ghc-err (compiling ,mod)) (format "Error(%s)" mod))
             (`(loaded ,loaded-mods) (if (s-equals? dante-loaded-file fname) "Loaded" (format "Loaded(%s)" (file-name-base dante-loaded-file))))
             (`(,hd . ,tl) (format "%s" hd))
             (_ (format "%s" dante-state))))))))
@@ -564,7 +565,7 @@ ACC umulate input and ERR-MSGS."
              (m (when i (match-string 0 acc)))
              (rest (when i (substring acc (match-end 0)))))
         (cond ((and m (string-match dante-ghci-prompt m))
-               (setq dante-state 'ghc-err)
+               (setq dante-state (list 'ghc-err dante-state))
                (setq result (list 'failed (nreverse err-msgs) (match-string 1 m))))
               ((and m (string-match progress m))
                (setq dante-state (list 'compiling (match-string 3 m))))
