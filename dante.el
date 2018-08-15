@@ -139,13 +139,15 @@ will be returned.  Otherwise, use
 
 (defun dante-status ()
   "Return dante's status for the current source buffer."
-  (let ((buf (dante-buffer-p)))
+  (let ((buf (dante-buffer-p))
+        (fname (buffer-file-name (current-buffer))))
     (if (not buf) "stopped"
       (with-current-buffer buf
-        (s-join ":"
-           (-non-nil
-            (list (format "%s" dante-state)
-                  (when lcr-process-callback (format "busy(%s)" (1+ (length dante-queue)))))))))))
+        (if lcr-process-callback (format "busy(%s)" (1+ (length dante-queue)))
+          (pcase dante-state
+            (`(loaded ,loaded-mods) (if (s-equals? dante-loaded-file fname) "Loaded" (format "Loaded(%s)" (file-name-base dante-loaded-file))))
+            (`(,hd . ,tl) (format "%s" hd))
+            (_ (format "%s" dante-state))))))))
 
 ;;;###autoload
 (define-minor-mode dante-mode
@@ -562,7 +564,7 @@ ACC umulate input and ERR-MSGS."
              (m (when i (match-string 0 acc)))
              (rest (when i (substring acc (match-end 0)))))
         (cond ((and m (string-match dante-ghci-prompt m))
-               (setq dante-state 'ghc-reports-error)
+               (setq dante-state 'ghc-err)
                (setq result (list 'failed (nreverse err-msgs) (match-string 1 m))))
               ((and m (string-match progress m))
                (setq dante-state (list 'compiling (match-string 3 m))))
