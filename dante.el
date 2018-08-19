@@ -145,8 +145,8 @@ will be returned.  Otherwise, use
       (with-current-buffer buf
         (if lcr-process-callback (format "busy(%s)" (1+ (length dante-queue)))
           (pcase dante-state
-            (`(ghc-err (compiling ,mod)) (format "Error(%s)" mod))
-            (`(loaded ,loaded-mods) (if (s-equals? dante-loaded-file fname) "Loaded" (format "Loaded(%s)" (file-name-base dante-loaded-file))))
+            (`(ghc-err (compiling ,mod)) (format "error(%s)" mod))
+            (`(loaded ,loaded-mods) (if (s-equals? dante-loaded-file fname) "loaded" (format "loaded(%s)" (file-name-base dante-loaded-file))))
             (`(,hd . ,tl) (format "%s" hd))
             (_ (format "%s" dante-state))))))))
 
@@ -342,7 +342,7 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 ;; Company integration (auto-completion)
 
 (lcr-def dante-complete (prefix)
-  (let ((imports (--filter (s-prefix? "import" it) (s-lines (buffer-string)))))
+  (let ((imports (--filter (s-matches? "^import[ \t]+" it) (s-lines (buffer-string)))))
     (lcr-call dante-async-load-current-buffer nil)
     (dolist (i imports)
       (lcr-call dante-async-call i)) ;; the file probably won't load when trying to complete. So, load all the imports instead.
