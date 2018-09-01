@@ -113,13 +113,13 @@ otherwise look for a .cabal file, or use the current dir."
 "GHCi launch command lines.
 This is an alist from method name to a function taking the root
 directory and returning either a command line or nil if the
-method should not apply.  The first non-nil result will be used as
-a command line.  Customize this if you do not want certain methods
-to be used by default by dante.  If you want a specific
-configuration for your project, customize
-`dante-repl-command-line' directly, f as a directory-local
-variable."
+method should not apply."
   :type '(alist :key-type symbol :value-type function))
+
+(defcustom dante-repl-command-line-methods (-map 'car dante-repl-command-line-methods-alist)
+  "Keys in `dante-repl-command-line-methods-alist' to try, in order.
+Consider setting this variable as a directory variable."
+  :type '(repeat symbol))
 
 (defvar dante-command-line "command line used to start GHCi")
 
@@ -130,8 +130,10 @@ will be returned.  Otherwise, use
 `dante-repl-command-line-methods-alist'."
   (or dante-repl-command-line
       (let ((root (dante-project-root)))
-        (--first it (--map (funcall (cdr it) root)
-                           dante-repl-command-line-methods-alist)))))
+        (--some (funcall it root)
+                (--map (alist-get it dante-repl-command-line-methods-alist)
+                       dante-repl-command-line-methods)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
 
