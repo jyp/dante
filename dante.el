@@ -104,7 +104,7 @@ otherwise look for a .cabal file, or use the current dir."
 (defcustom dante-repl-command-line-methods-alist
   `((styx  . ,(lambda (root) (dante-repl-by-file root '("styx.yaml") '("styx" "repl" dante-target))))
     (nix   . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
-                                                      '("nix-shell" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))))
+                                                      '("nix-shell" "--pure" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))))
     (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl" dante-target))))
     (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl" dante-target))))
     (new-build . ,(lambda (root) (when (or (directory-files root nil ".+\\.cabal$") (file-exists-p "cabal.project"))
@@ -278,13 +278,15 @@ and over."
          (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)))
     (if (and unchanged same-buffer) (buffer-local-value 'dante-load-message buffer) ; see #52
       (setq dante-temp-epoch epoch)
-      (let ((flycheck-mode (and flycheck-mode (not (flycheck-running-p))))) (save-buffer)) ;; save without re-triggering flycheck
+      (let ((flycheck-mode (and flycheck-mode (not (flycheck-running-p))))
+            (flymake-mode nil))
+        (save-buffer)) ;; save without re-triggering flycheck/flymake
       ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
       (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
       (with-current-buffer buffer
         (dante-async-write (if (and (not interpret) same-buffer) ":r"
                              (concat ":l " (if interpret "*" "") (dante-local-name fname))))
-        (cl-destructuring-bind (status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
+        (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
           (setq dante-loaded-file fname)
           (setq dante-load-message err-messages))))))
 
@@ -295,7 +297,7 @@ and over."
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
-    (lcr-cps-let (((messages) (dante-async-load-current-buffer nil)))
+    (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
       (let* ((temp-file (dante-local-name (buffer-file-name (current-buffer)))))
       (funcall cont
                'finished
@@ -841,6 +843,43 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
     (forward-line)
     (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t)))
       (dante-eval-loop block-end))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Flymake
+
+(defun dante-flymake (report-fn &rest _args)
+  "Run a check and pass the status onto REPORT-FN."
+  (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
+    (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
+      (let* ((temp-file (dante-local-name (buffer-file-name (current-buffer))))
+             (diags (-non-nil (--map (dante-fm-message it (current-buffer) temp-file) messages))))
+        (funcall report-fn diags)))))
+
+(defun dante-fm-message (matched buffer temp-file)
+  "Convert the MATCHED message to flymake format.
+Or nil if BUFFER / TEMP-FILE are not relevant to the message."
+  (cl-destructuring-bind (file location-raw err-type msg) matched
+    (let* ((type (cond
+                  ((s-matches? "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) :error)
+                  ((s-matches? "^warning:" err-type) :warning)
+                  ((s-matches? "^splicing " err-type) :splice)
+                  (t :error)))
+           (location (dante-parse-error-location location-raw))
+           (r (flymake-diag-region buffer (plist-get location :line) (plist-get location :col))))
+      ;; FIXME: sometimes the "error type" contains the actual error too.
+      
+      ;; Flymake bug: in fact, we would want to report all errors,
+      ;; with buffer = (find-buffer-visiting file), but flymake
+      ;; actually ignores the buffer argument of
+      ;; flymake-make-diagnostic (?!).
+      (when (and r (string= temp-file file))
+        (flymake-make-diagnostic buffer (car r) (cdr r)
+                                 type (concat err-type (s-trim-right msg)))))))
+
+(defun dante-setup-flymake-backend ()
+  (add-hook 'flymake-diagnostic-functions 'dante-flymake nil t))
+
+;; (add-hook 'haskell-mode-hook 'dante-setup-flymake-backend)
 
 (provide 'dante)
 
