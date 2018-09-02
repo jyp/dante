@@ -13,20 +13,20 @@ comparison).
 
 | Feature                                 | Command               | Keybinding |
 |-----------------------------------------+-----------------------+------------|
-| Flycheck type checking                  | flycheck-mode         |            |
+| Flycheck type checking                  | flycheck-mode (†)     |            |
 | Company completion                      | company-mode          |            |
 | Type of selection                       | dante-type-at         | C-c .      |
 | Info at point                           | dante-info            | C-c ,      |
 | Apply Ghc suggestion for error at point | attrap-attrap         | C-c /      |
 | Goto definition                         | xref-find-definitions | M-.        |
 | Find uses                               | xref-find-references  | M-?        |
-| REPLoid (*)                             | dante-eval-block      | C-c "      |
+| REPLoid (∗)                              | dante-eval-block      | C-c "      |
 | Restart                                 | dante-restart         |            |
 | Diagnosis                               | dante-diagnose        |            |
 | Remote operation over ssh, via tramp    | N/A                   | N/A        |
 
 
-(*) REPLoid explanation:
+*** REPLoid (∗)
 
 You can evaluate code by writing it in a comment of the form
 ~-- >>>~ and run ~dante-eval-block~.
@@ -85,8 +85,15 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
     :commands 'dante-mode
     :init
     (add-hook 'haskell-mode-hook 'dante-mode)
-    (add-hook 'haskell-mode-hook 'flycheck-mode))
+    (add-hook 'haskell-mode-hook 'flycheck-mode)
+    (set (make-local-variable 'flymake-no-changes-timeout) nil)
+    (set (make-local-variable 'flymake-start-syntax-check-on-newline) nil)
+    (set (make-local-variable 'flycheck-check-syntax-automatically) '(save mode-enabled)))
 #+END_SRC
+
+(†) Dante can only check *saved* buffers. Therefore, it will save the
+current buffer every time that a check is triggered. To avoid any
+surprise, you may want to disable checks on timeout/change, as above.
 
 *** Using dante + hlint
 
