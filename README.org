@@ -86,14 +86,27 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
     :init
     (add-hook 'haskell-mode-hook 'dante-mode)
     (add-hook 'haskell-mode-hook 'flycheck-mode)
-    (set (make-local-variable 'flymake-no-changes-timeout) nil)
-    (set (make-local-variable 'flymake-start-syntax-check-on-newline) nil)
-    (set (make-local-variable 'flycheck-check-syntax-automatically) '(save mode-enabled)))
 #+END_SRC
 
 (†) Dante can only check *saved* buffers. Therefore, it will save the
 current buffer every time that a check is triggered. To avoid any
-surprise, you may want to disable checks on timeout/change, as above.
+surprise (and a bug where GHCi does not see file changes), you may
+want to disable checks on idle after change:
+
+#+BEGIN_SRC elisp
+(setq flymake-no-changes-timeout nil)
+(setq flymake-start-syntax-check-on-newline nil)
+(setq flycheck-check-syntax-automatically '(save mode-enabled)))
+#+END_SRC
+
+You may additionally want to save buffer after some idle time after a
+change. With Emacs 26:
+
+#+BEGIN_SRC elisp
+(auto-save-visited-mode 1)
+(setq auto-save-visited-interval 1)
+#+END_SRC
+
 
 *** Using dante + hlint
 
