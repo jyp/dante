@@ -85,7 +85,7 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
     :commands 'dante-mode
     :init
     (add-hook 'haskell-mode-hook 'dante-mode)
-    (add-hook 'haskell-mode-hook 'flycheck-mode)
+    (add-hook 'haskell-mode-hook 'flycheck-mode))
 #+END_SRC
 
 (†) Dante can only check *saved* buffers. Therefore, it will save the
@@ -96,7 +96,7 @@ want to disable checks on idle after change:
 #+BEGIN_SRC elisp
 (setq flymake-no-changes-timeout nil)
 (setq flymake-start-syntax-check-on-newline nil)
-(setq flycheck-check-syntax-automatically '(save mode-enabled)))
+(setq flycheck-check-syntax-automatically '(save mode-enabled))
 #+END_SRC
 
 You may additionally want to save buffer after some idle time after a
