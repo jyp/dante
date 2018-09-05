@@ -329,13 +329,16 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 
 (defun dante-parse-error-location (string)
   "Parse the line number from the error in STRING."
-  (when (string-match (concat
-                       "\\(?2:[0-9]+\\):\\(?4:[0-9]+\\)\\(?:-\\(?5:[0-9]+\\)\\)?" ;; "121:1" & "12:3-5"
-                       "\\|"
-                       "(\\(?2:[0-9]+\\),\\(?4:[0-9]+\\))-(\\(?3:[0-9]+\\),\\(?5:[0-9]+\\))") ;; "(289,5)-(291,36)"
-                      string)
-    (list :line (string-to-number (match-string 2 string))
-          :col (string-to-number (match-string 4 string)))))
+  (pcase (s-match (concat
+                   "\\(?6:[0-9]+\\):\\(?4:[0-9]+\\)\\(?:-\\(?5:[0-9]+\\)\\)?" ;; "121:1" & "12:3-5"
+                   "\\|"
+                   "(\\(?6:[0-9]+\\),\\(?4:[0-9]+\\))-(\\(?3:[0-9]+\\),\\(?5:[0-9]+\\))") ;; "(289,5)-(291,36)"
+                  string)
+    (`(,_whole-match ,_ ,_ ,line-end ,col ,col-end ,line)
+     (list :line (string-to-number line)
+           :line-end (string-to-number (or line-end line))
+           :col (string-to-number col)
+           :col-end (string-to-number (or col-end col))))))
 
 (defun dante-call-in-buffer (buffer func &rest args)
   "In BUFFER, call FUNC with ARGS."
@@ -502,11 +505,12 @@ Note that sub-sessions are not interleaved."
       (let ((req (pop dante-queue)))
         (when req (funcall req buffer))))))
 
-(defcustom dante-load-flags '("+c" "-fno-diagnostics-show-caret" "-Wwarn=missing-home-modules")
+(defcustom dante-load-flags '("+c" "-fno-diagnostics-show-caret" "-Wwarn=missing-home-modules" "-ferror-spans")
   "Flags to set whenever GHCi is started."
   :type (cons 'set (--map (list 'const :tag (concat (car it) ": " (cadr it)) (car it))
                           '(("+c" "Gather type information (necessary for `dante-type-at')")
                             ("-Wall" "Report all warnings")
+                            ("-ferror-spans" "Report span in error messages (used in flymake only)")
                             ("-fdefer-typed-holes" "Accept typed holes, so that completion/type-at continues to work then.")
                             ("-fdefer-type-errors" "Accept incorrectly typed programs, so that completion/type-at continues to work then. (However errors in dependencies won't be detected as such)")
                             ("-Wwarn=missing-home-modules" "Do not error-out if a module is missing in .cabal file")
