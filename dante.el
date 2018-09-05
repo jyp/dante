@@ -322,23 +322,19 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
                   (t 'error)))
            (location (dante-parse-error-location location-raw)))
       ;; FIXME: sometimes the "error type" contains the actual error too.
-      (flycheck-error-new-at (plist-get location :line) (plist-get location :col) type (concat err-type "\n" (s-trim-right msg))
+      (flycheck-error-new-at (car location) (cadr location) type (concat err-type "\n" (s-trim-right msg))
                              :checker checker
                              :buffer (when (string= temp-file file) buffer)
                              :filename (dante-buffer-file-name buffer)))))
 
 (defun dante-parse-error-location (string)
-  "Parse the line number from the error in STRING."
-  (pcase (s-match (concat
-                   "\\(?6:[0-9]+\\):\\(?4:[0-9]+\\)\\(?:-\\(?5:[0-9]+\\)\\)?" ;; "121:1" & "12:3-5"
-                   "\\|"
-                   "(\\(?6:[0-9]+\\),\\(?4:[0-9]+\\))-(\\(?3:[0-9]+\\),\\(?5:[0-9]+\\))") ;; "(289,5)-(291,36)"
-                  string)
-    (`(,_whole-match ,_ ,_ ,line-end ,col ,col-end ,line)
-     (list :line (string-to-number line)
-           :line-end (string-to-number (or line-end line))
-           :col (string-to-number col)
-           :col-end (string-to-number (or col-end col))))))
+  "Parse the line/col numbers from the error in STRING."
+  (--map (when it (string-to-number it))
+         (cdr (s-match (concat
+                        "\\(?1:[0-9]+\\):\\(?2:[0-9]+\\)\\(?:-\\(?4:[0-9]+\\)\\)?" ;; "121:1" & "12:3-5"
+                        "\\|"
+                        "(\\(?1:[0-9]+\\),\\(?2:[0-9]+\\))-(\\(?3:[0-9]+\\),\\(?4:[0-9]+\\))") ;; "(289,5)-(291,36)"
+                       string))))
 
 (defun dante-call-in-buffer (buffer func &rest args)
   "In BUFFER, call FUNC with ARGS."
@@ -857,26 +853,36 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
              (diags (-non-nil (--map (dante-fm-message it (current-buffer) temp-file) messages))))
         (funcall report-fn diags)))))
 
+(defun dante-pos-at-line-col (buf l c)
+  (with-current-buffer buf
+    (save-excursion
+      (goto-char (point-min))
+      (forward-line (1- l))
+      (move-to-column (1- c))
+      (point))))
+
 (defun dante-fm-message (matched buffer temp-file)
   "Convert the MATCHED message to flymake format.
 Or nil if BUFFER / TEMP-FILE are not relevant to the message."
   (cl-destructuring-bind (file location-raw err-type msg) matched
-    (let* ((type (cond
-                  ((s-matches? "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) :error)
-                  ((s-matches? "^warning:" err-type) :warning)
-                  ((s-matches? "^splicing " err-type) :splice)
-                  (t :error)))
-           (location (dante-parse-error-location location-raw))
-           (r (flymake-diag-region buffer (plist-get location :line) (plist-get location :col))))
-      ;; FIXME: sometimes the "error type" contains the actual error too.
-      
-      ;; Flymake bug: in fact, we would want to report all errors,
-      ;; with buffer = (find-buffer-visiting file), but flymake
-      ;; actually ignores the buffer argument of
-      ;; flymake-make-diagnostic (?!).
-      (when (and r (string= temp-file file))
-        (flymake-make-diagnostic buffer (car r) (cdr r)
-                                 type (concat err-type (s-trim-right msg)))))))
+    ;; Flymake bug: in fact, we would want to report all errors,
+    ;; with buffer = (find-buffer-visiting file), but flymake
+    ;; actually ignores the buffer argument of
+    ;; flymake-make-diagnostic (?!).
+    (when (string= temp-file file)
+      (let* ((type (cond
+                    ((s-matches? "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) :error)
+                    ((s-matches? "^warning:" err-type) :warning)
+                    ((s-matches? "^splicing " err-type) :splice)
+                    (t :error)))
+             (location (dante-parse-error-location location-raw))
+             (r (pcase location
+                  (`(,l1 ,c1 ,l2 ,c2) (cons (dante-pos-at-line-col buffer l1 c1) (dante-pos-at-line-col buffer (or l2 l1) (1+ c2))))
+                  (`(,l ,c) (flymake-diag-region buffer l c)))))
+        ;; FIXME: sometimes the "error type" contains the actual error too.
+        (when r
+          (flymake-make-diagnostic buffer (car r) (cdr r)
+                                   type (concat err-type (s-trim-right msg))))))))
 
 (defun dante-setup-flymake-backend ()
   (add-hook 'flymake-diagnostic-functions 'dante-flymake nil t))
