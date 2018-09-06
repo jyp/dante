@@ -57,7 +57,7 @@
 
 (defcustom dante-debug nil
   "Show debug output."
-  :group 'dante
+  :group 'dante :safe t
   :type '(set (const inputs) (const outputs) (const responses) (const command-line)))
 
 (defcustom dante-repl-command-line nil
@@ -83,7 +83,7 @@ Customize as a file or directory variable."
   "The target to demand from cabal repl, as a string or nil.
 Customize as a file or directory variable.  Different targets
 will be in different GHCi sessions."
-  :group 'dante
+  :group 'dante :safe t
   :type '(choice (const nil) string))
 
 (put 'dante-target 'safe-local-variable #'stringp)
@@ -109,7 +109,8 @@ otherwise look for a .cabal file, or use the current dir."
     (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl" dante-target))))
     (new-build . ,(lambda (root) (when (or (directory-files root nil ".+\\.cabal$") (file-exists-p "cabal.project"))
                                    '("cabal" "new-repl" dante-target "--builddir=dist/dante"))))
-    (bare  . ,(lambda (_) '("cabal" "repl" dante-target "--builddir=dist/dante"))))
+    (bare  . ,(lambda (_) '("cabal" "repl" dante-target "--builddir=dist/dante")))
+    (bare-ghci  . ,(lambda (_) '("ghci"))))
 "GHCi launch command lines.
 This is an alist from method name to a function taking the root
 directory and returning either a command line or nil if the
@@ -119,7 +120,7 @@ method should not apply."
 (defcustom dante-repl-command-line-methods (-map 'car dante-repl-command-line-methods-alist)
   "Keys in `dante-repl-command-line-methods-alist' to try, in order.
 Consider setting this variable as a directory variable."
-  :type '(repeat symbol))
+   :group dante :safe t :type '(repeat symbol))
 
 (defvar dante-command-line "command line used to start GHCi")
 
@@ -637,11 +638,6 @@ This is a standard process sentinel function."
     (concat "This is the buffer associated with the GHCi session. This buffer
 is normally hidden, but the GHCi process ended.
 
-EXTRA TROUBLESHOOTING INFO
-
-Process state change: " change "
-" (dante-debug-info (current-buffer)) "
-
 WHAT TO DO NEXT
 
 Verify that the GHCi REPL can be loaded manually, then try to
@@ -649,11 +645,13 @@ customize (probably file-locally or directory-locally)
 `dante-project-root' and/or `dante-repl-command-line'.  If you
 fixed the problem, just kill this buffer, Dante will make a fresh
 one and attempt to restart GHCi automatically.
+If you leave this buffer around Dante will not attempt to restart
+GHCi.  You can always run `dante-restart' to make it try again.
 
-If you do not want Dante will not attempt to restart GHCi, just
-leave this buffer around. You can always run `dante-restart' to
-make it try again.
-")
+EXTRA TROUBLESHOOTING INFO
+
+Process state change: " change "
+" (dante-debug-info (current-buffer)))
     'face 'compilation-error)))
 
 (defun dante-buffer-name ()
