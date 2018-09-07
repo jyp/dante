@@ -172,8 +172,10 @@ if the argument is omitted or nil or a positive integer).
   :keymap dante-mode-map
   :group 'dante
   (if dante-mode
-      (progn (flycheck-select-checker 'haskell-dante))
-      (progn (flycheck-select-checker nil))))
+      (progn (flycheck-select-checker 'haskell-dante)
+             (add-hook 'flymake-diagnostic-functions 'dante-flymake nil t))
+      (progn (flycheck-select-checker nil)
+             (remove-hook 'flymake-diagnostic-functions 'dante-flymake t))))
 
 (define-key dante-mode-map (kbd "C-c .") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c ,") 'dante-info)
@@ -882,12 +884,7 @@ Or nil if BUFFER / TEMP-FILE are not relevant to the message."
         ;; FIXME: sometimes the "error type" contains the actual error too.
         (when r
           (flymake-make-diagnostic buffer (car r) (cdr r)
-                                   type (concat err-type (s-trim-right msg))))))))
-
-(defun dante-setup-flymake-backend ()
-  (add-hook 'flymake-diagnostic-functions 'dante-flymake nil t))
-
-;; (add-hook 'haskell-mode-hook 'dante-setup-flymake-backend)
+                                   type (s-trim-right (replace-regexp-in-string "^    " "" msg))))))))
 
 (provide 'dante)
 

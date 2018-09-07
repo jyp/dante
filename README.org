@@ -85,7 +85,11 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
     :commands 'dante-mode
     :init
     (add-hook 'haskell-mode-hook 'dante-mode)
-    (add-hook 'haskell-mode-hook 'flycheck-mode))
+    
+    (add-hook 'haskell-mode-hook 'flycheck-mode)
+    ;; OR:
+    ;; (add-hook 'haskell-mode-hook 'flymake-mode)
+    )
 #+END_SRC
 
 (†) Dante can only check *saved* buffers. Therefore, it will save the
