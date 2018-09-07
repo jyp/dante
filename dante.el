@@ -120,7 +120,7 @@ method should not apply."
 (defcustom dante-repl-command-line-methods (-map 'car dante-repl-command-line-methods-alist)
   "Keys in `dante-repl-command-line-methods-alist' to try, in order.
 Consider setting this variable as a directory variable."
-   :group dante :safe t :type '(repeat symbol))
+   :group 'dante :safe t :type '(repeat symbol))
 
 (defvar dante-command-line "command line used to start GHCi")
 
@@ -170,7 +170,7 @@ if the argument is omitted or nil or a positive integer).
 \\{dante-mode-map}"
   :lighter (:eval (concat " Danté:" (dante-status)))
   :keymap dante-mode-map
-  :group dante
+  :group 'dante
   (if dante-mode
       (progn (flycheck-select-checker 'haskell-dante))
       (progn (flycheck-select-checker nil))))
