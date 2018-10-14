@@ -88,6 +88,9 @@ will be in different GHCi sessions."
 
 (put 'dante-target 'safe-local-variable #'stringp)
 
+;; A set for saving obelisk projects' root directories.
+(setq obelisk-projects-dirs (make-hash-table :test 'equal))
+
 (defun dante-project-root ()
   "Get the root directory for the project.
 If `dante-project-root' is set as a variable, return that,
@@ -95,7 +98,28 @@ otherwise look for a .cabal file, or use the current dir."
   (file-name-as-directory
    (or dante-project-root
        (set (make-local-variable 'dante-project-root)
-            (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name)))))))
+	    (file-name-directory (or (obelisk-project-root)
+				     (dante-cabal-find-file)
+				     (dante-buffer-file-name)))))))
+
+(defun obelisk-project-root ()
+  "Checks if a source file is a 'ob init' project's file stucture. In case it is, returns project's root
+   directory, also saves that directory in `obelisk-projects-dirs' set data structure so that `dante-repl-by-file'
+   can check faster is the project it is an obelisk project "
+  (let* ((file-dir-as-list (--filter (not (string= "" it)) (split-string (file-name-directory default-directory) "/")))
+	 (obelisk-folder-stucture? (--any? (-contains? file-dir-as-list it) '("backend" "common" "frontend"))))
+    (when obelisk-folder-stucture?
+      (let ((obelisk-root-folder (--take-while (-none? (lambda (a) (string= it a)) '("backend" "common" "frontend"))
+					       file-dir-as-list)))
+	(when (-all? (lambda (folder-name)
+		       (-> (-concat '("") obelisk-root-folder `(,folder-name ""))
+			   (string-join "/")
+			   (file-directory-p)))
+		     '("backend" "common" "config" "frontend" "static"))
+	  (let ((project-root (string-join (-concat '("") obelisk-root-folder `("")) "/")))
+	    (when (not (gethash project-root obelisk-projects-dirs nil))
+	      (puthash project-root t obelisk-projects-dirs))
+	    project-root))))))
 
 (defun dante-repl-by-file (root files cmdline)
   "Return if ROOT / file exists for any file in FILES, return CMDLINE."
@@ -103,6 +127,7 @@ otherwise look for a .cabal file, or use the current dir."
 
 (defcustom dante-repl-command-line-methods-alist
   `((styx  . ,(lambda (root) (dante-repl-by-file root '("styx.yaml") '("styx" "repl" dante-target))))
+    (obelisk   . ,(lambda (root) (when (gethash root obelisk-projects-dirs nil) '("ob" "repl"))))
     (nix   . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
                                                       '("nix-shell" "--pure" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))))
     (impure-nix
