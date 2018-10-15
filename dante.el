@@ -114,11 +114,7 @@ otherwise look for a .cabal file, or use the current dir."
 	     (project-root (string-join (-concat '("") obelisk-root-folder `("")) "/")))
 	(if (gethash project-root obelisk-projects-dirs nil)
 	    project-root
-	  (when (-all? (lambda (folder-name)
-			 (-> (-concat '("") obelisk-root-folder `(,folder-name ""))
-			     (string-join "/")
-			     (file-directory-p)))
-		       '("backend" "common" "config" "frontend" "static"))
+	  (when (file-directory-p (concat project-root ".obelisk/impl"))
 	    (puthash project-root t obelisk-projects-dirs)
 	    project-root))))))
 
