@@ -128,7 +128,7 @@ method should not apply."
 Consider setting this variable as a directory variable."
    :group 'dante :safe t :type '(repeat symbol))
 
-(defvar dante-command-line "command line used to start GHCi")
+(defvar-local dante-command-line nil "command line used to start GHCi")
 
 (defun dante-repl-command-line ()
   "Return the command line for running GHCi.
@@ -137,9 +137,10 @@ will be returned.  Otherwise, use
 `dante-repl-command-line-methods-alist'."
   (or dante-repl-command-line
       (let ((root (dante-project-root)))
-        (--some (funcall it root)
-                (--map (alist-get it dante-repl-command-line-methods-alist)
-                       dante-repl-command-line-methods)))))
+        (or (--some (funcall it root)
+                    (--map (alist-get it dante-repl-command-line-methods-alist)
+                           dante-repl-command-line-methods))
+            (error "No GHCi loading method applies. Customize `dante-repl-command-line-methods' or `dante-repl-command-line'")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
