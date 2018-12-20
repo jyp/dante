@@ -108,6 +108,9 @@ otherwise look for a .cabal file, or use the current dir."
     (impure-nix
            . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
                                                       '("nix-shell" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))))
+    (nix-ghci
+           . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
+                                                      '("nix-shell" "--pure" "--run" "ghci"))))
     (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl" dante-target))))
     (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl" dante-target))))
     (new-build . ,(lambda (root) (when (or (directory-files root nil ".+\\.cabal$") (file-exists-p "cabal.project"))
