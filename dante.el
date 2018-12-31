@@ -91,8 +91,8 @@ will be in different GHCi sessions."
 (defun dante-project-root ()
   "Get the root directory for the project.
 If `dante-project-root' is set as a variable, return that,
-otherwise look for cabal files. cabal.project gets first
-precedence, followed by the .cabal. As a fallback just use the
+otherwise look for cabal files.  cabal.project gets first
+precedence, followed by the .cabal.  As a fallback just use the
 current directory."
   (file-name-as-directory
    (or dante-project-root
@@ -145,7 +145,7 @@ will be returned.  Otherwise, use
         (or (--some (funcall it root)
                     (--map (alist-get it dante-repl-command-line-methods-alist)
                            dante-repl-command-line-methods))
-            (error "No GHCi loading method applies. Customize `dante-repl-command-line-methods' or `dante-repl-command-line'")))))
+            (error "No GHCi loading method applies.  Customize `dante-repl-command-line-methods' or `dante-repl-command-line'")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
@@ -359,7 +359,7 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 
 (defun dante-company (command &optional arg &rest _ignored)
   "Company backend for dante.
-See ``company-backends'' for the meaning of COMMAND and _ARGS."
+See ``company-backends'' for the meaning of COMMAND, ARG and _IGNORED."
   (interactive (list 'interactive))
   (let ((prefix )) ;; todo: pref len
     (cl-case command
@@ -538,6 +538,7 @@ Note that sub-sessions are not interleaved."
       buffer))
 
 (defun dante-debug (category msg)
+  "Append a debug message MSG to the current buffer if CATEGORY is enabled in `dante-debug'."
   (when (memq category dante-debug)
     (goto-char (point-max))
     (insert msg)))
@@ -554,8 +555,9 @@ Must be called from GHCi process buffer."
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
 
-(defun dante-regexp-disjoin (&rest args)
-  (s-join "\\|" args))
+(defun dante-regexp-disjoin (&rest regexps)
+  "Return a regexp matching any of REGEXPS."
+  (s-join "\\|" regexps))
 
 (lcr-def dante-load-loop (acc err-msgs)
   "Parse the output of load command.
@@ -698,7 +700,7 @@ CABAL-FILE rather than trying to locate one."
                 "")))))
 
 (defun dante-cabal-find-project (&optional dir)
-  "Search for cabal.project file."
+  "Search for cabal.project file, upwards from DIR (or `default-directory' if nil)."
   (let ((use-dir (or dir default-directory))
         result)
     (while (and use-dir (not (file-directory-p use-dir)))
@@ -871,6 +873,7 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
         (funcall report-fn diags)))))
 
 (defun dante-pos-at-line-col (buf l c)
+  "Translate line L and column C into a position within BUF."
   (with-current-buffer buf
     (save-excursion
       (goto-char (point-min))
