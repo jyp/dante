@@ -181,8 +181,8 @@ to destroy the buffer and create a fresh one without this variable enabled.
         (if lcr-process-callback (format "busy(%s)" (1+ (length dante-queue)))
           (pcase dante-state
             (`(ghc-err (compiling ,mod)) (format "error(%s)" mod))
-            (`(loaded ,loaded-mods) (if (s-equals? dante-loaded-file fname) "loaded" (format "loaded(%s)" (file-name-base dante-loaded-file))))
-            (`(,hd . ,tl) (format "%s" hd))
+            (`(loaded ,_loaded-mods) (if (s-equals? dante-loaded-file fname) "loaded" (format "loaded(%s)" (file-name-base dante-loaded-file))))
+            (`(,hd . ,_tl) (format "%s" hd))
             (_ (format "%s" dante-state))))))))
 
 ;;;###autoload
@@ -361,20 +361,19 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
   "Company backend for dante.
 See ``company-backends'' for the meaning of COMMAND, ARG and _IGNORED."
   (interactive (list 'interactive))
-  (let ((prefix )) ;; todo: pref len
-    (cl-case command
-      (interactive (company-begin-backend 'dante-company))
-      (sorted t)
-      (prefix (when (and dante-mode (dante-ident-pos-at-point))
-                (let* ((id-start (car (dante-ident-pos-at-point)))
-                       (_ (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
-                       (import-end (match-end 0))
-                       (import-start (match-beginning 0))
-                       (is-import (eq import-end id-start)))
-                  (buffer-substring-no-properties (if is-import import-start id-start) (point)))))
-      (candidates
-       (unless (eq (dante-get-var 'dante-state) 'dead)
-         (cons :async (apply-partially 'dante-complete arg)))))))
+  (cl-case command
+    (interactive (company-begin-backend 'dante-company))
+    (sorted t)
+    (prefix (when (and dante-mode (dante-ident-pos-at-point))
+              (let* ((id-start (car (dante-ident-pos-at-point)))
+                     (_ (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
+                     (import-end (match-end 0))
+                     (import-start (match-beginning 0))
+                     (is-import (eq import-end id-start)))
+                (buffer-substring-no-properties (if is-import import-start id-start) (point)))))
+    (candidates
+     (unless (eq (dante-get-var 'dante-state) 'dead)
+       (cons :async (apply-partially 'dante-complete arg))))))
 
 (with-eval-after-load 'company
   (add-to-list 'company-backends 'dante-company))
