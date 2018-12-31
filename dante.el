@@ -355,6 +355,7 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 (defun dante-company (command &optional arg &rest _ignored)
   "Company backend for dante.
 See ``company-backends'' for the meaning of COMMAND and _ARGS."
+  (interactive (list 'interactive))
   (let ((prefix )) ;; todo: pref len
     (cl-case command
       (interactive (company-begin-backend 'dante-company))
