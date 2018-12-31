@@ -91,11 +91,16 @@ will be in different GHCi sessions."
 (defun dante-project-root ()
   "Get the root directory for the project.
 If `dante-project-root' is set as a variable, return that,
-otherwise look for a .cabal file, or use the current dir."
+otherwise look for cabal files. cabal.project gets first
+precedence, followed by the .cabal. As a fallback just use the
+current directory."
   (file-name-as-directory
    (or dante-project-root
        (set (make-local-variable 'dante-project-root)
-            (file-name-directory (or (dante-cabal-find-file) (dante-buffer-file-name)))))))
+            (file-name-directory (or
+                                  (dante-cabal-find-project)
+                                  (dante-cabal-find-file)
+                                  (dante-buffer-file-name)))))))
 
 (defun dante-repl-by-file (root files cmdline)
   "Return if ROOT / file exists for any file in FILES, return CMDLINE."
@@ -691,6 +696,17 @@ CABAL-FILE rather than trying to locate one."
                    ".cabal$" ""
                    (file-name-nondirectory cabal-file))
                 "")))))
+
+(defun dante-cabal-find-project (&optional dir)
+  "Search for cabal.project file."
+  (let ((use-dir (or dir default-directory))
+        result)
+    (while (and use-dir (not (file-directory-p use-dir)))
+      (setq use-dir (file-name-directory (directory-file-name use-dir))))
+    (when use-dir
+      (setq result (locate-dominating-file use-dir "cabal.project"))
+      (when result
+        (setq result (expand-file-name "cabal.project" result))))))
 
 (defun dante-cabal-find-file (&optional dir)
   "Search for package description file upwards starting from DIR.
