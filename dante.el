@@ -148,6 +148,26 @@ will be returned.  Otherwise, use
             (error "No GHCi loading method applies.  Customize `dante-repl-command-line-methods' or `dante-repl-command-line'")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
+
+(defvar-local dante-load-message nil "load messages")
+(defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
+(defvar-local dante-queue nil "List of ready GHCi queries.")
+(defvar-local dante-package-name nil "The package name associated with the current buffer.")
+(defvar-local dante-state nil
+  "nil: initial state
+- deleting: The process of the buffer is being deleted.
+- dead: GHCi died on its own. Do not try restarting
+automatically. The user will have to manually run `dante-restart'
+to destroy the buffer and create a fresh one without this variable enabled.
+- other value: informative value for the user about what GHCi is doing
+")
+
+(defun dante-get-var (symbol)
+  "Return the value of SYMBOL in the GHCi process buffer."
+  (let ((bp (dante-buffer-p))) (when bp (buffer-local-value symbol bp))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Mode
 
 (defvar dante-mode-map (make-sparse-keymap) "Dante minor mode's map.")
@@ -193,26 +213,6 @@ if the argument is omitted or nil or a positive integer).
 (define-key dante-mode-map (kbd "C-c ,") 'dante-info)
 (define-key dante-mode-map (kbd "C-c /") 'attrap-attrap) ;; deprecated keybinding
 (define-key dante-mode-map (kbd "C-c \"") 'dante-eval-block)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
-
-(defvar-local dante-load-message nil "load messages")
-(defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
-(defvar-local dante-queue nil "List of ready GHCi queries.")
-(defvar-local dante-package-name nil "The package name associated with the current buffer.")
-(defvar-local dante-state nil
-  "nil: initial state
-- deleting: The process of the buffer is being deleted.
-- dead: GHCi died on its own. Do not try restarting
-automatically. The user will have to manually run `dante-restart'
-to destroy the buffer and create a fresh one without this variable enabled.
-- other value: informative value for the user about what GHCi is doing
-")
-
-(defun dante-get-var (symbol)
-  "Return the value of SYMBOL in the GHCi process buffer."
-  (let ((bp (dante-buffer-p))) (when bp (buffer-local-value symbol bp))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive utils
