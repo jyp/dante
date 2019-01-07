@@ -99,10 +99,9 @@ current directory."
   (file-name-as-directory
    (or dante-project-root
        (set (make-local-variable 'dante-project-root)
-            (file-name-directory (or
-                                  (dante-cabal-find-project)
-                                  (dante-cabal-find-file)
-                                  (dante-buffer-file-name)))))))
+            (or (dante-cabal-find-project)
+                (file-name-directory (or (dante-cabal-find-file)
+                                         (dante-buffer-file-name))))))))
 
 (defun dante-repl-by-file (root files cmdline)
   "Return if ROOT / file exists for any file in FILES, return CMDLINE."
@@ -702,58 +701,16 @@ CABAL-FILE rather than trying to locate one."
                    (file-name-nondirectory cabal-file))
                 "")))))
 
-(defun dante-cabal-find-project (&optional dir)
-  "Search for cabal.project file, upwards from DIR (or `default-directory' if nil)."
-  (let ((use-dir (or dir default-directory))
-        result)
-    (while (and use-dir (not (file-directory-p use-dir)))
-      (setq use-dir (file-name-directory (directory-file-name use-dir))))
-    (when use-dir
-      (setq result (locate-dominating-file use-dir "cabal.project"))
-      (when result
-        (setq result (expand-file-name "cabal.project" result))))))
+(defun dante-cabal-find-project (&optional file)
+  "Search for directory of cabal.project file, upwards from FILE (or `default-directory' if nil)."
+  (locate-dominating-file (or file default-directory) "cabal.project"))
 
-(defun dante-cabal-find-file (&optional dir)
-  "Search for package description file upwards starting from DIR.
-If DIR is nil, `default-directory' is used as starting point for
-directory traversal.  Upward traversal is aborted if file owner
-changes.  Uses `dante-cabal-find-pkg-desc' internally."
-  (let ((use-dir (or dir default-directory)))
-    (while (and use-dir (not (file-directory-p use-dir)))
-      (setq use-dir (file-name-directory (directory-file-name use-dir))))
-    (when use-dir
-      (catch 'found
-        (let ((user (nth 2 (file-attributes use-dir)))
-              ;; Abbreviate, so as to stop when we cross ~/.
-              (root (abbreviate-file-name use-dir)))
-          ;; traverse current dir up to root as long as file owner doesn't change
-          (while (and root (equal user (nth 2 (file-attributes root))))
-            (let ((cabal-file (dante-cabal-find-pkg-desc root)))
-              (when cabal-file
-                (throw 'found cabal-file)))
-            (let ((proot (file-name-directory (directory-file-name root))))
-              (if (equal proot root) ;; fix-point reached?
-                  (throw 'found nil)
-                (setq root proot))))
-          nil)))))
+(defun dante-cabal-find-file (&optional file)
+  "Search for directory of cabal file, upwards from FILE (or `default-directory' if nil)."
+  (let ((dir (locate-dominating-file (or file default-directory)
+                                     (lambda (d) (directory-files d t ".\\.cabal\\'")))))
+    (when dir (car (directory-files dir t ".\\.cabal\\'")))))
 
-(defun dante-cabal-find-pkg-desc (dir &optional allow-multiple)
-  "Find a package description file in the directory DIR.
-Returns nil if none or multiple \".cabal\" files were found.  If
-ALLOW-MULTIPLE is non nil, in case of multiple \".cabal\" files,
-a list is returned instead of failing with a nil result."
-  ;; This is basically a port of Cabal's
-  ;; Distribution.Simple.Utils.findPackageDesc function
-  ;;  http://hackage.haskell.org/packages/archive/Cabal/1.16.0.3/doc/html/Distribution-Simple-Utils.html
-  ;; but without the exception throwing.
-  (let* ((cabal-files
-          (cl-remove-if 'file-directory-p
-                        (cl-remove-if-not 'file-exists-p
-                                          (directory-files dir t ".\\.cabal\\'")))))
-    (cond
-     ((= (length cabal-files) 1) (car cabal-files)) ;; exactly one candidate found
-     (allow-multiple cabal-files) ;; pass-thru multiple candidates
-     (t nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; xref support
