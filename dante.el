@@ -779,7 +779,10 @@ the echo area. Use nil to disable."
 (defvar dante-timer nil)
 (defun dante-idle-function ()
   (when (and dante-mode ;; don't start GHCi if dante is not on.
-             (with-current-buffer (dante-buffer-p) (not lcr-process-callback))) ;; Is GHCi idle?
+             (dante-buffer-p) ;; buffer exists
+             (with-current-buffer (dante-buffer-p)
+               (not (eq dante-state 'dead))) ;; GHCi alive?
+             (not lcr-process-callback)) ;; Is GHCi idle?
     (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
       (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap)) ;; not in a comment or string
         (setq-local dante-idle-point (point))
