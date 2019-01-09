@@ -124,13 +124,15 @@ You can activate the hlint checker in addition to the dante checker as follows:
 
 ** Customization
 Customization can be important to make sure that GHCi is properly
-loaded by dante, notably the variables ~dante-project-root~ and
-~dante-repl-command-line~.  Use ~M-x customize-group dante~ to read
-the documentation. Note in particular that customization can be done
-on a per-file or per-project basis by using [[https://www.gnu.org/software/emacs/manual/html_node/emacs/File-Variables.html#File-Variables][file-]] and [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory-local]]
-variables.
+loaded by dante. Notably the ~dante-repl-command-line-methods~ can be
+especially useful to check. For more fine-grained configuration, check
+~dante-project-root~ and ~dante-repl-command-line~.  Use ~M-x
+customize-group dante~ to read the documentation for all customizable
+variables. Note in particular that customization can be done on a
+per-file, per-package or per-project basis by using [[https://www.gnu.org/software/emacs/manual/html_node/emacs/File-Variables.html#File-Variables][file-]] and
+[[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory-local]] variables.
 
-Another useful variable to customize is ~dante-load-flags~
+Another useful variable to customize is ~dante-load-flags~.
 
 ** Comparison with Intero
 
