@@ -770,22 +770,28 @@ CABAL-FILE rather than trying to locate one."
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Idle-hook (missing bit: check for errors)
+;; Idle-hook
 
-;; (defvar dante-timer nil)
-;; (defun dante-idle-function ()
-;;   (when (bound-and-true-p dante-mode)
-;;     (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
-;;       (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap))
-;;         (setq-local dante-idle-point (point))
-;;         (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t))
-;;                         (ty (dante-async-call (concat ":type-at " tap))))
-;;           (when (eq (point) dante-idle-point)
-;;             (unless (current-message)
-;;               (message "%s" (s-collapse-whitespace (dante-fontify-expression ty)))))
-;;           )))))
-;; (when dante-timer (cancel-timer dante-timer))
-;; (setq dante-timer (run-with-idle-timer 1 t #'dante-idle-function))
+(defcustom dante-tap-type-time nil "Number of seconds after which
+GHCi is queried for the type of the thing at point, to display in
+the echo area. Use nil to disable."
+  :group 'dante)
+(defvar dante-timer nil)
+(defun dante-idle-function ()
+  (when (and dante-mode ;; don't start GHCi if dante is not on.
+             (with-current-buffer (dante-buffer-p) (not lcr-process-callback))) ;; Is GHCi idle?
+    (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
+      (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap)) ;; not in a comment or string
+        (setq-local dante-idle-point (point))
+        (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t))
+                        (ty (dante-async-call (concat ":type-at " tap))))
+          (when (and (not (current-message)) ;; echo area is free
+                     (not (s-match "^<interactive>" ty)) ;; no error
+                     (eq (point) dante-idle-point)) ;; cursor did not move
+              (message "%s" (s-collapse-whitespace (dante-fontify-expression ty)))))))))
+(when dante-timer (cancel-timer dante-timer))
+(when dante-tap-type-time
+  (setq dante-timer (run-with-idle-timer dante-tap-type-time t #'dante-idle-function)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
