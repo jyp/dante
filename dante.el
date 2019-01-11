@@ -90,67 +90,65 @@ will be in different GHCi sessions."
 
 (put 'dante-target 'safe-local-variable #'stringp)
 
-(defun dante-project-root ()
-  "Get the root directory for the project.
-If `dante-project-root' is set as a variable, return that,
-otherwise look for cabal files.  cabal.project gets first
-precedence, followed by the .cabal.  As a fallback just use the
-current directory."
-  (file-name-as-directory
-   (or dante-project-root
-       (set (make-local-variable 'dante-project-root)
-            (or (dante-cabal-find-project)
-                (file-name-directory (or (dante-cabal-find-file)
-                                         (dante-buffer-file-name))))))))
-
-(defun dante-repl-by-file (root files cmdline)
-  "Return if ROOT / file exists for any file in FILES, return CMDLINE."
-  (when (-any? (lambda (file) (file-exists-p (concat root file))) files) cmdline))
+(defun dante-cabal-nix (d)
+  "non-nil iff D contains a nix file and a cabal file."
+  (and (directory-files d t "shell.nix\\|default.nix")
+       (directory-files d t ".cabal$")))
 
 (defcustom dante-repl-command-line-methods-alist
-  `((styx  . ,(lambda (root) (dante-repl-by-file root '("styx.yaml") '("styx" "repl" dante-target))))
-    (nix   . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
-                                                      '("nix-shell" "--pure" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))))
-    (impure-nix
-           . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
-                                                      '("nix-shell" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))))
-    (nix-ghci
-           . ,(lambda (root) (dante-repl-by-file root '("shell.nix" "default.nix")
-                                                      '("nix-shell" "--pure" "--run" "ghci"))))
-    (stack . ,(lambda (root) (dante-repl-by-file root '("stack.yaml") '("stack" "repl" dante-target))))
-    (mafia . ,(lambda (root) (dante-repl-by-file root '("mafia") '("mafia" "repl" dante-target))))
-    (new-build . ,(lambda (root) (when (or (directory-files root nil ".+\\.cabal$") (file-exists-p "cabal.project"))
-                                   '("cabal" "new-repl" dante-target "--builddir=dist/dante"))))
-    (bare  . ,(lambda (_) '("cabal" "repl" dante-target "--builddir=dist/dante")))
-    (bare-ghci  . ,(lambda (_) '("ghci"))))
-"GHCi launch command lines.
-This is an alist from method name to a function taking the root
-directory and returning either a command line or nil if the
-method should not apply."
-  :type '(alist :key-type symbol :value-type function))
+  `((styx "styx.yaml" ("styx" "repl" dante-target))
+    (nix dante-cabal-nix ("nix-shell" "--pure" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))
+    (impure-nix dante-cabal-nix ("nix-shell" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))
+    (new-build "cabal.project" ("cabal" "new-repl" dante-target "--builddir=dist/dante"))
+    (nix-ghci ,(lambda (d) (directory-files d t "shell.nix\\|default.nix")) ("nix-shell" "--pure" "--run" "ghci"))
+    (stack "stack.yaml" ("stack" "repl" dante-target))
+    (mafia "mafia" ("mafia" "repl" dante-target))
+    (bare-cabal ,(lambda (d) (directory-files d t ".cabal$")) ("cabal" "repl" dante-target "--builddir=dist/dante"))
+    (bare-ghci ,(lambda (_) t) ("ghci")))
+"How to automatically locate project roots and launch GHCi.
+This is an alist from method name to a pair of
+a `locate-dominating-file' argument and a command line."
+  :type '(alist :key-type symbol :value-type (list (choice (string :tag "File to locate") (function :tag "Predicate to use")) (repeat sexp))))
 
 (defcustom dante-repl-command-line-methods (-map 'car dante-repl-command-line-methods-alist)
   "Keys in `dante-repl-command-line-methods-alist' to try, in order.
 Consider setting this variable as a directory variable."
    :group 'dante :safe t :type '(repeat symbol))
 
-(defvar-local dante-command-line nil "command line used to start GHCi")
+
+(defun dante-initialize-method ()
+  "Initialize `dante-project-root' and `dante-repl-command-line'.
+Do it according to `dante-repl-command-line-methods'."
+  (or (--first (let ((root (locate-dominating-file default-directory (nth 0 it))))
+                 (when root
+                   (setq-local dante-project-root root)
+                   (setq-local dante-repl-command-line (nth 1 it))))
+               (-non-nil (--map (alist-get it dante-repl-command-line-methods-alist)
+                                dante-repl-command-line-methods)))
+      (error "No GHCi loading method applies.  Customize
+      `dante-repl-command-line-methods' or
+      `dante-repl-command-line' and `dante-project-root'")))
 
 (defun dante-repl-command-line ()
   "Return the command line for running GHCi.
-If the custom variable `dante-repl-command-line' is non-nil, it
-will be returned.  Otherwise, use
-`dante-repl-command-line-methods-alist'."
+If the variable `dante-repl-command-line' is non-nil, it will be
+returned.  Otherwise, use `dante-initialize-method'."
   (or dante-repl-command-line
-      (let ((root (dante-project-root)))
-        (or (--some (funcall it root)
-                    (--map (alist-get it dante-repl-command-line-methods-alist)
-                           dante-repl-command-line-methods))
-            (error "No GHCi loading method applies.  Customize `dante-repl-command-line-methods' or `dante-repl-command-line'")))))
+      (progn (dante-initialize-method) dante-repl-command-line)))
+
+(defun dante-project-root ()
+  "Get the root directory for the project.
+If the variable `dante-project-root' is non-nil, return that,
+otherwise search for project root using
+`dante-initialize-method'."
+  (or dante-project-root
+      (progn (dante-initialize-method) dante-project-root)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
+(defvar-local dante-command-line nil "command line used to start GHCi")
 (defvar-local dante-load-message nil "load messages")
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
 (defvar-local dante-queue nil "List of ready GHCi queries.")
@@ -700,10 +698,6 @@ CABAL-FILE rather than trying to locate one."
                    ".cabal$" ""
                    (file-name-nondirectory cabal-file))
                 "")))))
-
-(defun dante-cabal-find-project (&optional file)
-  "Search for directory of cabal.project file, upwards from FILE (or `default-directory' if nil)."
-  (locate-dominating-file (or file default-directory) "cabal.project"))
 
 (defun dante-cabal-find-file (&optional file)
   "Search for directory of cabal file, upwards from FILE (or `default-directory' if nil)."
