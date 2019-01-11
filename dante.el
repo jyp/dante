@@ -95,7 +95,7 @@ will be in different GHCi sessions."
   (and (directory-files d t "shell.nix\\|default.nix")
        (directory-files d t ".cabal$")))
 
-(defcustom dante-repl-command-line-methods-alist
+(defcustom dante-methods-alist
   `((styx "styx.yaml" ("styx" "repl" dante-target))
     (nix dante-cabal-nix ("nix-shell" "--pure" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))
     (impure-nix dante-cabal-nix ("nix-shell" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))
@@ -110,23 +110,23 @@ This is an alist from method name to a pair of
 a `locate-dominating-file' argument and a command line."
   :type '(alist :key-type symbol :value-type (list (choice (string :tag "File to locate") (function :tag "Predicate to use")) (repeat sexp))))
 
-(defcustom dante-repl-command-line-methods (-map 'car dante-repl-command-line-methods-alist)
-  "Keys in `dante-repl-command-line-methods-alist' to try, in order.
+(defcustom dante-methods (-map 'car dante-methods-alist)
+  "Keys in `dante-methods-alist' to try, in order.
 Consider setting this variable as a directory variable."
    :group 'dante :safe t :type '(repeat symbol))
 
 
 (defun dante-initialize-method ()
   "Initialize `dante-project-root' and `dante-repl-command-line'.
-Do it according to `dante-repl-command-line-methods'."
+Do it according to `dante-methods'."
   (or (--first (let ((root (locate-dominating-file default-directory (nth 0 it))))
                  (when root
                    (setq-local dante-project-root root)
                    (setq-local dante-repl-command-line (nth 1 it))))
-               (-non-nil (--map (alist-get it dante-repl-command-line-methods-alist)
-                                dante-repl-command-line-methods)))
+               (-non-nil (--map (alist-get it dante-methods-alist)
+                                dante-methods)))
       (error "No GHCi loading method applies.  Customize
-      `dante-repl-command-line-methods' or
+      `dante-methods' or
       `dante-repl-command-line' and `dante-project-root'")))
 
 (defun dante-repl-command-line ()
