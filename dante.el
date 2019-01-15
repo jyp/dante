@@ -771,6 +771,8 @@ GHCi is queried for the type of the thing at point, to display in
 the echo area. Use nil to disable."
   :group 'dante)
 (defvar dante-timer nil)
+(defvar dante-last-valid-idle-type-message nil)
+
 (defun dante-idle-function ()
   (when (and dante-mode ;; don't start GHCi if dante is not on.
              (dante-buffer-p) ;; buffer exists
@@ -782,10 +784,16 @@ the echo area. Use nil to disable."
         (setq-local dante-idle-point (point))
         (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t))
                         (ty (dante-async-call (concat ":type-at " tap))))
-          (when (and (not (current-message)) ;; echo area is free
+          (when (and (let ((cur-msg (current-message)))
+                       (or (not cur-msg)
+                           (string-match-p (concat "^Wrote " (buffer-file-name)) cur-msg)
+                           (and dante-last-valid-idle-type-message
+                                (string-match-p dante-last-valid-idle-type-message cur-msg))))
+                     ;; echo area is free, or the buffer was just saved from having triggered a check, or the queue had many requests for idle display and is displaying the last fulfilled idle type request
                      (not (s-match "^<interactive>" ty)) ;; no error
                      (eq (point) dante-idle-point)) ;; cursor did not move
-              (message "%s" (s-collapse-whitespace (dante-fontify-expression ty)))))))))
+              (setq dante-last-valid-idle-type-message (s-collapse-whitespace (dante-fontify-expression ty)))
+              (message "%s" dante-last-valid-idle-type-message)))))))
 (when dante-timer (cancel-timer dante-timer))
 (when dante-tap-type-time
   (setq dante-timer (run-with-idle-timer dante-tap-type-time t #'dante-idle-function)))
