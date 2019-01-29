@@ -90,6 +90,11 @@ will be in different GHCi sessions."
 
 (put 'dante-target 'safe-local-variable #'stringp)
 
+(defun dante-cabal-new-nix (d)
+  "non-nil iff D contains a nix file and a cabal file."
+  (and (directory-files d t "shell.nix\\|default.nix")
+       (directory-files d t "cabal.project")))
+
 (defun dante-cabal-nix (d)
   "non-nil iff D contains a nix file and a cabal file."
   (and (directory-files d t "shell.nix\\|default.nix")
@@ -97,6 +102,8 @@ will be in different GHCi sessions."
 
 (defcustom dante-methods-alist
   `((styx "styx.yaml" ("styx" "repl" dante-target))
+    (new-nix dante-cabal-new-nix ("nix-shell" "--pure" "--run" (concat "cabal new-repl " (or dante-target "") " --builddir=dist/dante")))
+    (new-impure-nix dante-cabal-new-nix ("nix-shell" "--run" (concat "cabal new-repl " (or dante-target "") " --builddir=dist/dante")))
     (nix dante-cabal-nix ("nix-shell" "--pure" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))
     (impure-nix dante-cabal-nix ("nix-shell" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))
     (new-build "cabal.project" ("cabal" "new-repl" dante-target "--builddir=dist/dante"))
