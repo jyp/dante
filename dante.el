@@ -681,6 +681,7 @@ Process state change: " change "
       (cd root)
       (fundamental-mode) ;; this has several effects, including resetting the local variables
       (buffer-disable-undo)
+      (setq-local buffer-read-only t)
       (current-buffer))))
 
 (defun dante-set-state (state)
