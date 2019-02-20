@@ -291,7 +291,9 @@ and over."
          (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)))
     (if (and unchanged same-buffer) (buffer-local-value 'dante-load-message buffer) ; see #52
       (setq dante-temp-epoch epoch)
+      (vc-before-save)
       (basic-save-buffer-1) ;; save without re-triggering flycheck/flymake nor any save hook
+      (vc-after-save)
       ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
       (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
       (with-current-buffer buffer
