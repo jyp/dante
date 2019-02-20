@@ -84,11 +84,10 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
     :after haskell-mode
     :commands 'dante-mode
     :init
-    (add-hook 'haskell-mode-hook 'dante-mode)
-    
     (add-hook 'haskell-mode-hook 'flycheck-mode)
     ;; OR:
     ;; (add-hook 'haskell-mode-hook 'flymake-mode)
+    (add-hook 'haskell-mode-hook 'dante-mode)
     )
 #+END_SRC
 
