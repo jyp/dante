@@ -125,16 +125,16 @@ Consider setting this variable as a directory variable."
 
 (defun dante-initialize-method ()
   "Initialize `dante-project-root' and `dante-repl-command-line'.
-Do it according to `dante-methods'."
+Do it according to `dante-methods' and previous values of the above variables."
   (or (--first (let ((root (locate-dominating-file default-directory (nth 0 it))))
                  (when root
-                   (setq-local dante-project-root root)
-                   (setq-local dante-repl-command-line (nth 1 it))))
+                   (setq-local dante-project-root (or dante-project-root root))
+                   (setq-local dante-repl-command-line (or dante-repl-command-line (nth 1 it)))))
                (-non-nil (--map (alist-get it dante-methods-alist)
                                 dante-methods)))
       (error "No GHCi loading method applies.  Customize
       `dante-methods' or
-      `dante-repl-command-line' and `dante-project-root'")))
+      (`dante-repl-command-line' and `dante-project-root')")))
 
 (defun dante-repl-command-line ()
   "Return the command line for running GHCi.
