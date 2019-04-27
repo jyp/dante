@@ -312,10 +312,10 @@ and over."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
     (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
       (let* ((temp-file (dante-local-name (buffer-file-name (current-buffer)))))
-      (funcall cont
-               'finished
-               (--remove (eq 'splice (flycheck-error-level it))
-                         (--map (dante-fly-message it checker (current-buffer) temp-file) messages)))))))
+        (funcall cont
+                 'finished
+                 (--remove (eq 'splice (flycheck-error-level it))
+                           (--map (dante-fly-message it checker (current-buffer) temp-file) messages)))))))
 
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
