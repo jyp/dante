@@ -210,10 +210,8 @@ if the argument is omitted or nil or a positive integer).
   :keymap dante-mode-map
   :group 'dante
   (if dante-mode
-      (progn (flycheck-select-checker 'haskell-dante)
-             (add-hook 'flymake-diagnostic-functions 'dante-flymake nil t))
-      (progn (flycheck-select-checker nil)
-             (remove-hook 'flymake-diagnostic-functions 'dante-flymake t))))
+      (add-hook 'flymake-diagnostic-functions 'dante-flymake nil t)
+    (remove-hook 'flymake-diagnostic-functions 'dante-flymake t)))
 
 (define-key dante-mode-map (kbd "C-c .") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c ,") 'dante-info)
@@ -317,11 +315,18 @@ and over."
                  (--remove (eq 'splice (flycheck-error-level it))
                            (--map (dante-fly-message it checker (current-buffer) temp-file) messages)))))))
 
+(defun dante-flycheck-available-p ()
+  "Return non-nil if the flycheck backend should be active."
+  dante-mode)
+
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
 process."
   :start 'dante-check
+  :predicate #'dante-flycheck-available-p
   :modes '(haskell-mode literate-haskell-mode))
+
+(add-to-list 'flycheck-checkers 'haskell-dante)
 
 (defun dante-fly-message (matched checker buffer temp-file)
   "Convert the MATCHED message to flycheck format.
