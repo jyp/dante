@@ -336,8 +336,10 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
       ;; FIXME: sometimes the "error type" contains the actual error too.
       (flycheck-error-new-at (car location) (cadr location) type (concat err-type "\n" (s-trim-right msg))
                              :checker checker
-                             :buffer (when (string= temp-file file) buffer)
-                             :filename (dante-buffer-file-name buffer)))))
+                             :buffer buffer
+                             :filename (if (string= temp-file file)
+                                           (dante-buffer-file-name buffer)
+                                         file)))))
 
 (defun dante-parse-error-location (string)
   "Parse the line/col numbers from the error in STRING."
