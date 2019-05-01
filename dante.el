@@ -365,6 +365,10 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
            (common (nth 2 (read (concat "(" (car lines) ")")))))
       (--map (replace-regexp-in-string "\\\"" "" (concat common it)) (cdr lines)))))
 
+(defun dante--in-a-comment ()
+  "Return non-nil if point is in a comment."
+  (nth 4 (syntax-ppss)))
+
 (declare-function company-begin-backend 'company)
 
 (defun dante-company (command &optional arg &rest _ignored)
@@ -374,7 +378,7 @@ See ``company-backends'' for the meaning of COMMAND, ARG and _IGNORED."
   (cl-case command
     (interactive (company-begin-backend 'dante-company))
     (sorted t)
-    (prefix (when (and dante-mode (dante-ident-pos-at-point))
+    (prefix (when (and dante-mode (not (dante--in-a-comment)) (dante-ident-pos-at-point))
               (let* ((id-start (car (dante-ident-pos-at-point)))
                      (_ (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
                      (import-end (match-end 0))
