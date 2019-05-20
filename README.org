@@ -23,10 +23,9 @@ comparison).
 | REPLoid (∗)                              | dante-eval-block      | C-c "      |
 | Restart                                 | dante-restart         |            |
 | Diagnosis                               | dante-diagnose        |            |
-| Remote operation over ssh, via tramp    | N/A                   | N/A        |
+| Remote operation over ssh, via tramp (†) | N/A                   | N/A        |
 
-
-*** REPLoid (∗)
+*** (∗) REPLoid
 
 You can evaluate code by writing it in a comment of the form
 ~-- >>>~ and run ~dante-eval-block~.
@@ -74,6 +73,12 @@ Any GHCi command can be put in such a block, but note however that:
 So if your goal is run your webserver/database/etc. within GHCi, you
 should not do it using dante.
 
+*** (†) Tramp
+If programs such as ~nix-shell~ are not found on the remote host, you
+may need to ajust the tramp path. For example:
+#+BEGIN_SRC elisp
+(add-to-list 'tramp-remote-path 'tramp-own-remote-path)
+#+END_SRC
 ** Installation
 
 Turn on Dante in your ~haskell-mode-hook~. I recommend:
