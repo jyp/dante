@@ -151,4 +151,4 @@ To the best of my knowledge, here is how Dante compares with Intero:
 - With Dante, Flychecking is optional (yet recommended), whereas
   Intero demands that you flycheck your code.
 - Dante has has a different approach to Haskell evaluation
-- Dante offers no support for eldoc, nor Hoogle.
+- Dante offers no support for eldoc (but can show type signatures in the minibuffer by modifying the variable: dante-tap-type-time), nor Hoogle.
