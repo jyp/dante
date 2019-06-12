@@ -245,10 +245,19 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
   (interactive "P")
   (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
     (lcr-cps-let ((_load_messages (dante-async-load-current-buffer nil))
-                    (ty (dante-async-call (concat ":type-at " tap))))
-      (if insert (save-excursion (goto-char (line-beginning-position))
-                                 (insert (dante-fontify-expression ty) "\n"))
-                 (message "%s" (dante-fontify-expression ty))))))
+                  (ty (dante--async-type-at tap)))
+      (if ty
+          (if insert (save-excursion (goto-char (line-beginning-position))
+                                     (insert ty "\n"))
+            (message "%s" ty))
+        (message "Unable to obtain the type")))))
+
+(lcr-def dante--async-type-at (ghc-subexp)
+  "Asynchronously get the fontified type of GHC-SUBEXP.
+The result will be nil when there are errors."
+  (let ((ty (lcr-call dante-async-call (concat ":type-at " ghc-subexp))))
+    (unless (s-match "^\\(<interactive>\\|Couldn't guess that module name\\)" ty)
+      (dante-fontify-expression ty))))
 
 (defun dante-info (ident)
   "Get the info about the IDENT at point."
@@ -803,16 +812,16 @@ the echo area. Use nil to disable."
       (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap)) ;; not in a comment or string
         (setq-local dante-idle-point (point))
         (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t))
-                        (ty (dante-async-call (concat ":type-at " tap))))
-          (when (and (let ((cur-msg (current-message)))
+                      (ty (dante--async-type-at tap)))
+          (when (and ty
+                     (let ((cur-msg (current-message)))
                        (or (not cur-msg)
                            (string-match-p (concat "^Wrote " (buffer-file-name)) cur-msg)
                            (and dante-last-valid-idle-type-message
                                 (string-match-p dante-last-valid-idle-type-message cur-msg))))
                      ;; echo area is free, or the buffer was just saved from having triggered a check, or the queue had many requests for idle display and is displaying the last fulfilled idle type request
-                     (not (s-match "^<interactive>" ty)) ;; no error
                      (eq (point) dante-idle-point)) ;; cursor did not move
-              (setq dante-last-valid-idle-type-message (s-collapse-whitespace (dante-fontify-expression ty)))
+              (setq dante-last-valid-idle-type-message (s-collapse-whitespace ty))
               (message "%s" dante-last-valid-idle-type-message)))))))
 (when dante-timer (cancel-timer dante-timer))
 (when dante-tap-type-time
