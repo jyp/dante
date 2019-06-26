@@ -122,6 +122,7 @@ a `locate-dominating-file' argument and a command line."
 Consider setting this variable as a directory variable."
    :group 'dante :safe t :type '(repeat symbol))
 
+(put 'dante-methods 'safe-local-variable #'listp)
 
 (defun dante-initialize-method ()
   "Initialize `dante-project-root' and `dante-repl-command-line'.
