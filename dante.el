@@ -715,9 +715,7 @@ CABAL-FILE rather than trying to locate one."
             (let ((cabal-file (or cabal-file
                                   (dante-cabal-find-file))))
               (if cabal-file
-                  (replace-regexp-in-string
-                   ".cabal$" ""
-                   (file-name-nondirectory cabal-file))
+                  (file-name-sans-extension (file-name-nondirectory cabal-file))
                 "")))))
 
 (defun dante-cabal-find-file (&optional file)
