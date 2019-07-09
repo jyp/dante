@@ -284,23 +284,22 @@ Interpreting puts all symbols from the current module in
 scope. Compiling to avoids re-interpreting the dependencies over
 and over."
   (let* ((epoch (buffer-modified-tick))
-         (unchanged (equal epoch dante-temp-epoch))
-         (fname (buffer-file-name (current-buffer)))
-         (buffer (lcr-call dante-session))
-         (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)))
-    (if (and unchanged same-buffer) (buffer-local-value 'dante-load-message buffer) ; see #52
-      (setq dante-temp-epoch epoch)
-      (vc-before-save)
-      (basic-save-buffer-1) ;; save without re-triggering flycheck/flymake nor any save hook
-      (vc-after-save)
-      ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
-      (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
-      (with-current-buffer buffer
-        (dante-async-write (if (and (not interpret) same-buffer) ":r"
-                             (concat ":l " (if interpret "*" "") (dante-local-name fname))))
-        (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
-          (setq dante-loaded-file fname)
-          (setq dante-load-message err-messages))))))
+         (unchanged (equal epoch dante-temp-epoch)))
+    (if unchanged
+        dante-load-message ; see #52
+      (let ((fname (flycheck-save-buffer-to-temp #'flycheck-temp-file-system))
+            (source-buffer (current-buffer))
+            (buffer (lcr-call dante-session)))
+        (setq-local dante-temp-epoch epoch)
+        ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
+        (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
+        (with-current-buffer buffer
+          (dante-async-write (if interpret
+                                 (concat ":l " (if interpret "*" "") fname)
+                               ":r"))
+          (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
+            (setq-local dante-loaded-file fname)
+            (setq-local dante-load-message err-messages)))))))
 
 (defun dante-local-name (fname)
   "Local name of FNAME on the remote host."
