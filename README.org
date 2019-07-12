@@ -126,17 +126,27 @@ You can activate the hlint checker in addition to the dante checker as follows:
                 '(warning . haskell-hlint))))
 #+END_SRC
 
-** Customization
-Customization can be important to make sure that GHCi is properly
-loaded by dante. Notably the ~dante-repl-command-line-methods~ can be
-especially useful to check. For more fine-grained configuration, check
-~dante-project-root~ and ~dante-repl-command-line~.  Use ~M-x
+** Configuration
+Configuration can be important to make sure that GHCi is properly
+loaded by dante.  Even though Dante will do its best to figure out the
+proper way to load GHCi for your project, it may still fail. A typical
+way to configure GHCi command line is to a add a ~.dir-locals.el~ file
+to your project root, with the following contents:
+
+#+BEGIN_SRC elisp
+((nil . ((dante-methods . (new-impure-nix)))))
+#+END_SRC
+
+Replace ~new-impure-nix~ with the proper value, which you can figure
+out by ~M-x describe-variable <RET> dante-methods-alist~.
+
+For more fine-grained configuration, check ~dante-project-root~,
+~dante-repl-command-line~ and ~dante-load-flags~.  Use ~M-x
 customize-group dante~ to read the documentation for all customizable
 variables. Note in particular that customization can be done on a
 per-file, per-package or per-project basis by using [[https://www.gnu.org/software/emacs/manual/html_node/emacs/File-Variables.html#File-Variables][file-]] and
-[[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory-local]] variables.
+[[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory-local]] variables (as recommended above).
 
-Another useful variable to customize is ~dante-load-flags~.
 
 ** Comparison with Intero
 
