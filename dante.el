@@ -787,10 +787,9 @@ CABAL-FILE rather than trying to locate one."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Idle-hook
 
-(defcustom dante-tap-type-time nil "Number of seconds after which
-GHCi is queried for the type of the thing at point, to display in
-the echo area. Use nil to disable."
-  :group 'dante)
+(defcustom dante-tap-type-time nil
+"Delay after to display type of the thing at point, in seconds.
+Use nil to disable." :group 'dante)
 (defvar dante-timer nil)
 (defvar dante-last-valid-idle-type-message nil)
 
@@ -809,7 +808,7 @@ the echo area. Use nil to disable."
                        (or (not cur-msg)
                            (string-match-p (concat "^Wrote " (buffer-file-name)) cur-msg)
                            (and dante-last-valid-idle-type-message
-                                (string-match-p dante-last-valid-idle-type-message cur-msg))))
+                                (string-equal dante-last-valid-idle-type-message cur-msg))))
                      ;; echo area is free, or the buffer was just saved from having triggered a check, or the queue had many requests for idle display and is displaying the last fulfilled idle type request
                      (not (s-match "^<interactive>" ty)) ;; no error
                      (eq (point) dante-idle-point)) ;; cursor did not move
