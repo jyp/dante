@@ -278,6 +278,8 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 (defvar-local dante-temp-epoch -1
   "The value of `buffer-modified-tick' when the contents were last loaded.")
 
+(defvar dante-original-buffer-map (make-hash-table :test 'equal) "Hash table from (local) temp file names to the file they originate")
+
 (lcr-def dante-async-load-current-buffer (interpret)
   "Load and maybe INTERPRET the temp file for current buffer.
 Interpreting puts all symbols from the current module in
@@ -285,21 +287,21 @@ scope. Compiling to avoids re-interpreting the dependencies over
 and over."
   (let* ((epoch (buffer-modified-tick))
          (unchanged (equal epoch dante-temp-epoch))
-         (fname (buffer-file-name (current-buffer)))
+         (src-fname (buffer-file-name (current-buffer)))
+         (fname (dante-temp-file-name (current-buffer)))
          (buffer (lcr-call dante-session))
-         (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) fname)))
+         (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) src-fname)))
     (if (and unchanged same-buffer) (buffer-local-value 'dante-load-message buffer) ; see #52
       (setq dante-temp-epoch epoch)
-      (vc-before-save)
-      (basic-save-buffer-1) ;; save without re-triggering flycheck/flymake nor any save hook
-      (vc-after-save)
+      (puthash (dante-local-name fname) src-fname dante-original-buffer-map)
+      (write-region nil nil fname nil 0)
       ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
       (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
       (with-current-buffer buffer
         (dante-async-write (if (and (not interpret) same-buffer) ":r"
                              (concat ":l " (if interpret "*" "") (dante-local-name fname))))
         (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
-          (setq dante-loaded-file fname)
+          (setq dante-loaded-file src-fname)
           (setq dante-load-message err-messages))))))
 
 (defun dante-local-name (fname)
@@ -310,7 +312,7 @@ and over."
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
     (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
-      (let* ((temp-file (dante-local-name (buffer-file-name (current-buffer)))))
+      (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer)))))
         (funcall cont
                  'finished
                  (--remove (eq 'splice (flycheck-error-level it))
@@ -455,6 +457,34 @@ The path returned is canonicalized and stripped of any text properties."
     (when name
       (dante-canonicalize-path (substring-no-properties name)))))
 
+(defvar-local dante-temp-file-name nil
+  "The name of a temporary file to which the current buffer's content is copied.")
+
+(defun dante-tramp-make-tramp-temp-file (buffer)
+  "Create a temporary file for BUFFER, perhaps on a remote host."
+  (let* ((fname (buffer-file-name buffer))
+         (suffix (file-name-extension fname t)))
+    (if (file-remote-p fname)
+        (with-parsed-tramp-file-name (buffer-file-name buffer) vec
+          (let ((prefix (concat
+                         (expand-file-name
+                          tramp-temp-name-prefix (tramp-get-remote-tmpdir vec))
+                         "dante"))
+                result)
+            (while (not result)
+              (setq result (concat (make-temp-name prefix) suffix))
+              (if (file-exists-p result)
+                  (setq result nil)))
+                ;; This creates the file by side effect.
+            (set-file-times result)
+            (set-file-modes result #o700)
+            result))
+      (make-temp-file "dante" nil suffix))))
+
+(defun dante-temp-file-name (buffer)
+  "Return a (possibly remote) filename suitable to store BUFFER's contents."
+  (with-current-buffer buffer
+    (or dante-temp-file-name (setq dante-temp-file-name (dante-tramp-make-tramp-temp-file buffer)))))
 
 (defun dante-canonicalize-path (path)
   "Return a standardized version of PATH.
@@ -483,7 +513,7 @@ x:\\foo\\bar (i.e., Windows)."
   "Format the subexpression denoted by REG for GHCi commands."
   (pcase reg (`(,beg ,end)
               (format "%S %d %d %d %d %s"
-                      (buffer-file-name (current-buffer))
+                      (dante-local-name (dante-temp-file-name (current-buffer)))
                       (line-number-at-pos beg)
                       (dante--ghc-column-number-at-pos beg)
                       (line-number-at-pos end)
@@ -750,7 +780,8 @@ CABAL-FILE rather than trying to locate one."
           (line (string-to-number (match-string 2 string)))
           (col (string-to-number (match-string 3 string))))
       (xref-make-file-location
-       (expand-file-name file dante-project-root)
+       (or (gethash file dante-original-buffer-map)
+           (expand-file-name file dante-project-root))
        line (1- col)))))
 
 (defun dante--summarize-src-spans (spans file)
