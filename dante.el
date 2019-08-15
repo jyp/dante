@@ -890,7 +890,7 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
   "Run a check and pass the status onto REPORT-FN."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
     (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
-      (let* ((temp-file (dante-local-name (buffer-file-name (current-buffer))))
+      (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer))))
              (diags (-non-nil (--map (dante-fm-message it (current-buffer) temp-file) messages))))
         (funcall report-fn diags)))))
 
