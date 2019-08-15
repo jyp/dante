@@ -420,35 +420,17 @@ May return a qualified name."
 (defun dante-ident-pos-at-point ()
   "Return the span of the identifier under point, or nil if none found.
 May return a qualified name."
-  (save-excursion
-    (let ((case-fold-search nil))
-      (cl-multiple-value-bind (start end)
-          (list
-           (progn (skip-syntax-backward "w_") (point))
-           (progn (skip-syntax-forward "w_") (point)))
-        ;; If we're looking at a module ID that qualifies further IDs, add
-        ;; those IDs.
-        (goto-char start)
-        (while (and (looking-at "[[:upper:]]") (eq (char-after end) ?.)
-                    ;; It's a module ID that qualifies further IDs.
-                    (goto-char (1+ end))
-                    (save-excursion
-                      (when (not (zerop (skip-syntax-forward
-                                         (if (looking-at "\\s_") "_" "w'"))))
-                        (setq end (point))))))
-        ;; If we're looking at an ID that's itself qualified by previous
-        ;; module IDs, add those too.
-        (goto-char start)
-        (if (eq (char-after) ?.) (forward-char 1)) ;Special case for "."
-        (while (and (eq (char-before) ?.)
-                    (progn (forward-char -1)
-                           (not (zerop (skip-syntax-backward "w'"))))
-                    (skip-syntax-forward "'")
-                    (looking-at "[[:upper:]]"))
-          (setq start (point)))
-        ;; This is it.
-        (unless (= start end)
-          (list start end))))))
+  (let* ((qualifier-regex "\\([[:upper:]][[:alnum:]]*\\.\\)")
+         (ident-regex (concat qualifier-regex "*\\(\\s.+\\|\\(\\sw\\|\\s_\\)+\\)"))) ; note * for many qualifiers
+    (when (looking-at ident-regex)
+      (save-excursion
+        (let ((end (match-end 0)))
+          (skip-syntax-backward (if (looking-at "\\s.") "." "w_")) ;; find start of operator/variable
+          (while (save-excursion
+                   (and (re-search-backward (concat "\\b" qualifier-regex) (line-beginning-position) t)
+                        (s-matches? (concat "^" ident-regex "$") (buffer-substring-no-properties (point) end))))
+            (goto-char (match-beginning 0)))
+          (list (point) end))))))
 
 (defun dante-buffer-file-name (&optional buffer)
   "Call function `buffer-file-name' for BUFFER and clean its result.
