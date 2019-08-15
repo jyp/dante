@@ -600,7 +600,7 @@ ACC umulate input and ERR-MSGS."
                   "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\."
                   "^Ok, .*modules loaded." ;; .* stands for a number in english (two, three, ...) (GHC 8.2)
                   "^Ok, one module loaded."))
-        (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ ]*\\).*")
+        (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ \n]*\\).*")
         (err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\)\n\\(\\([ ]+.*\n\\)*\\)")
         (result nil))
     (while (not result)
