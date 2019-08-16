@@ -43,11 +43,11 @@
 (require 'dash)
 (require 'f)
 (require 'flycheck)
-(require 'haskell-mode)
 (require 's)
 (require 'xref)
 (require 'lcr)
 (eval-when-compile
+  (require 'haskell-mode)
   (require 'company))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -630,8 +630,20 @@ ACC umulate input and ERR-MSGS."
   (dante-debug 'outputs (format "\n[Dante] -> %s\n" cmd))
   (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n")))
 
+(lcr-def dante-async-call-bits (cmd func)
+    "Send GHCi the command string CMD and return the answer in several bits by calling FUNC."
+    (with-current-buffer (dante-buffer-p) (dante-async-write cmd))
+    (let ((acc "")
+          (matched nil))
+      (while (not matched)
+        (let ((bit (with-current-buffer (dante-buffer-p) (lcr-call dante-async-read))))
+          (funcall func bit)
+          (setq acc (concat acc bit))
+          (setq matched (string-match dante-ghci-prompt acc)))
+        (s-trim-right (substring acc 0 (1- (match-beginning 1)))))))
+
 (lcr-def dante-async-call (cmd)
-    "Send GHCi the command string CMD and return the answer."
+    "Send GHCi the command string CMD and return the answer in one chunk."
     (with-current-buffer (dante-buffer-p)
       (dante-async-write cmd)
       (let ((acc "")
@@ -834,26 +846,36 @@ Use nil to disable." :group 'dante)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
 
+
+(defun dante-insert-bits (where bit)
+  (let ((ccbit (s-replace "\n" "\n -- " (replace-regexp-in-string dante-ghci-prompt "" bit t t))))
+    (save-excursion (goto-char where) (insert ccbit))))
+
 (defun dante-eval-loop (block-end)
   "Evaluation loop iteration.
-Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block."
+BLOCK-END is a marker for the end of the evaluation block."
+  (message "DANTE-EVAL-LOOP>")
   (while (and (looking-at "[ \t]*--")
               (not (looking-at "[ \t]*--[ \t]+>>>")))
     (forward-line))
   (when (search-forward-regexp "[ \t]*--[ \t]+>>>" (line-end-position) t 1)
-    ;; found the next command; execute it and replace the result.
-    (lcr-cps-let ((res (dante-async-call (buffer-substring-no-properties (point) (line-end-position)))))
-      (beginning-of-line)
+    ;; found the next command.
+    (let ((cmd (buffer-substring-no-properties (point) (line-end-position))))
       (forward-line)
-      (save-excursion
-        (delete-region (point)
-                       ;; look for: empty comment line, next command or end of block.
-                       (or (and (search-forward-regexp "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t 1)
-                                (match-beginning 0))
-                           block-end)))
-      (insert (apply 'concat (--map (concat "-- " it "\n") (--remove (s-blank? it) (s-lines res)))))
       (beginning-of-line)
-      (dante-eval-loop block-end))))
+      ;; kill the old result block
+      (delete-region (point)
+                     ;; look for: empty comment line, next command or end of block.
+                     (or (and (re-search-forward "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t 1)
+                              (match-beginning 0))
+                         block-end))
+      (beginning-of-line)
+      (let ((running-point (point-marker)))
+        (set-marker-insertion-type running-point t)
+        (lcr-cps-let ((res (dante-async-call-bits cmd (apply-partially #'dante-insert-bits running-point))))
+          (goto-char running-point)
+          (delete-region (line-beginning-position) (point))
+          (dante-eval-loop block-end))))))
 
 (defun dante-eval-block ()
   "Evaluate the expression command(s) found after in the current command block >>> and insert the results."
