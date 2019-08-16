@@ -630,17 +630,18 @@ ACC umulate input and ERR-MSGS."
   (dante-debug 'outputs (format "\n[Dante] -> %s\n" cmd))
   (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n")))
 
-(lcr-def dante-async-call-bits (cmd func)
-    "Send GHCi the command string CMD and return the answer in several bits by calling FUNC."
-    (with-current-buffer (dante-buffer-p) (dante-async-write cmd))
-    (let ((acc "")
-          (matched nil))
-      (while (not matched)
-        (let ((bit (with-current-buffer (dante-buffer-p) (lcr-call dante-async-read))))
-          (funcall func bit)
-          (setq acc (concat acc bit))
-          (setq matched (string-match dante-ghci-prompt acc)))
-        (s-trim-right (substring acc 0 (1- (match-beginning 1)))))))
+(lcr-def dante-async-call-chunks (cmd &optional func)
+  "Send GHCi the command string CMD.
+Each chuck of answer is passed to FUNC, the whole is returned."
+  (with-current-buffer (dante-buffer-p) (dante-async-write cmd))
+  (let ((acc "")
+        (matched nil))
+    (while (not matched)
+      (let ((chunk (with-current-buffer (dante-buffer-p) (lcr-call dante-async-read))))
+        (when func (funcall func chunk))
+        (setq acc (concat acc chunk)))
+      (setq matched (string-match dante-ghci-prompt acc)))
+    (s-trim-right (substring acc 0 (1- (match-beginning 1))))))
 
 (lcr-def dante-async-call (cmd)
     "Send GHCi the command string CMD and return the answer in one chunk."
@@ -847,18 +848,13 @@ Use nil to disable." :group 'dante)
 ;; Reploid
 
 
-(defun dante-insert-bits (where bit)
-  (let ((ccbit (s-replace "\n" "\n -- " (replace-regexp-in-string dante-ghci-prompt "" bit t t))))
-    (save-excursion (goto-char where) (insert ccbit))))
-
 (defun dante-eval-loop (block-end)
   "Evaluation loop iteration.
 BLOCK-END is a marker for the end of the evaluation block."
-  (message "DANTE-EVAL-LOOP>")
   (while (and (looking-at "[ \t]*--")
               (not (looking-at "[ \t]*--[ \t]+>>>")))
     (forward-line))
-  (when (search-forward-regexp "[ \t]*--[ \t]+>>>" (line-end-position) t 1)
+  (when (re-search-forward "[ \t]*--[ \t]+>>>" (line-end-position) t)
     ;; found the next command.
     (let ((cmd (buffer-substring-no-properties (point) (line-end-position))))
       (forward-line)
@@ -866,23 +862,32 @@ BLOCK-END is a marker for the end of the evaluation block."
       ;; kill the old result block
       (delete-region (point)
                      ;; look for: empty comment line, next command or end of block.
-                     (or (and (re-search-forward "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t 1)
+                     (or (and (re-search-forward "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t)
                               (match-beginning 0))
                          block-end))
       (beginning-of-line)
-      (let ((running-point (point-marker)))
-        (set-marker-insertion-type running-point t)
-        (lcr-cps-let ((res (dante-async-call-bits cmd (apply-partially #'dante-insert-bits running-point))))
-          (goto-char running-point)
-          (delete-region (line-beginning-position) (point))
-          (dante-eval-loop block-end))))))
+      (insert "-- ")
+      (let ((insert-marker (point-marker)))
+        (set-marker-insertion-type insert-marker t)
+        (lcr-cps-let ((res (dante-async-call-chunks cmd
+          (lambda (chunk)
+            (let ((cleaned (replace-regexp-in-string "\n+" "\n-- " (replace-regexp-in-string dante-ghci-prompt "" chunk t t))))
+              (save-excursion
+                (goto-char insert-marker)
+                (when (and (looking-back "^[ \t]*--[ \t]*") (s-starts-with? "\n" cleaned))
+                  (delete-region (1- (line-beginning-position)) (point)))
+                (insert cleaned)))))))
+          (save-excursion
+            (goto-char insert-marker)
+            (delete-region (line-beginning-position) (point))
+            (dante-eval-loop block-end)))))))
 
 (defun dante-eval-block ()
   "Evaluate the expression command(s) found after in the current command block >>> and insert the results."
   (interactive)
   (beginning-of-line)
   (let ((block-end (save-excursion (while (looking-at "[ \t]*--") (forward-line)) (point-marker))))
-    (while (looking-at "[ \t]*--") (forward-line -1))
+    (while (looking-at "[ \t]*--") (forward-line -1)) ;; find start of block
     (forward-line)
     (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t)))
       (dante-eval-loop block-end))))
