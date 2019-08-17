@@ -272,11 +272,10 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
                (dante-fontify-expression info))
               (goto-char (point-min)))))))))
 
-;;;;;;;;;;;;;;;;;;;;;
-;; Flycheck checker
-
 (defvar-local dante-temp-epoch -1
   "The value of `buffer-modified-tick' when the contents were last loaded.")
+
+(defvar-local dante-interpreted nil)
 
 (defvar dante-original-buffer-map (make-hash-table :test 'equal) "Hash table from (local) temp file names to the file they originate")
 
@@ -291,8 +290,10 @@ and over."
          (fname (dante-temp-file-name (current-buffer)))
          (buffer (lcr-call dante-session))
          (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) src-fname)))
-    (if (and unchanged same-buffer) (buffer-local-value 'dante-load-message buffer) ; see #52
+    (if (and unchanged same-buffer (or dante-interpreted (not interpret))) ; see #52
+        (buffer-local-value 'dante-load-message buffer)
       (setq dante-temp-epoch epoch)
+      (setq dante-interpreted interpret)
       (puthash (dante-local-name fname) src-fname dante-original-buffer-map)
       (write-region nil nil fname nil 0)
       ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
@@ -308,6 +309,9 @@ and over."
   "Local name of FNAME on the remote host."
   (string-remove-prefix (or (file-remote-p fname) "") fname))
 
+;;;;;;;;;;;;;;;;;;;;;
+;; Flycheck checker
+
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
@@ -318,15 +322,11 @@ and over."
                  (--remove (eq 'splice (flycheck-error-level it))
                            (--map (dante-fly-message it checker (current-buffer) temp-file) messages)))))))
 
-(defun dante-flycheck-available-p ()
-  "Return non-nil if the flycheck backend should be active."
-  dante-mode)
-
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
 process."
   :start 'dante-check
-  :predicate #'dante-flycheck-available-p
+  :predicate (lambda () dante-mode)
   :modes '(haskell-mode literate-haskell-mode))
 
 (add-to-list 'flycheck-checkers 'haskell-dante)
