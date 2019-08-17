@@ -388,8 +388,8 @@ See ``company-backends'' for the meaning of COMMAND, ARG and _IGNORED."
   (cl-case command
     (interactive (company-begin-backend 'dante-company))
     (sorted t)
-    (prefix (when (and dante-mode (not (dante--in-a-comment)) (dante-ident-pos-at-point))
-              (let* ((id-start (car (dante-ident-pos-at-point)))
+    (prefix (when (and dante-mode (not (dante--in-a-comment)) (dante-ident-pos-at-point -1))
+              (let* ((id-start (car (dante-ident-pos-at-point -1)))
                      (_ (save-excursion (re-search-backward "import[\t ]*" (line-beginning-position) t)))
                      (import-end (match-end 0))
                      (import-start (match-beginning 0))
@@ -417,13 +417,13 @@ May return a qualified name."
     (when reg
       (apply #'buffer-substring-no-properties reg))))
 
-(defun dante-ident-pos-at-point ()
-  "Return the span of the identifier under point, or nil if none found.
-May return a qualified name."
+(defun dante-ident-pos-at-point (&optional offset)
+  "Return the span of the (qualified) identifier at point+OFFSET, or nil if none found."
   (let* ((qualifier-regex "\\([[:upper:]][[:alnum:]]*\\.\\)")
          (ident-regex (concat qualifier-regex "*\\(\\s.+\\|\\(\\sw\\|\\s_\\)+\\)"))) ; note * for many qualifiers
-    (when (looking-at ident-regex)
-      (save-excursion
+    (save-excursion
+      (goto-char (+ (point) (or offset 0)))
+      (when (looking-at ident-regex)
         (let ((end (match-end 0)))
           (skip-syntax-backward (if (looking-at "\\s.") "." "w_")) ;; find start of operator/variable
           (while (save-excursion
