@@ -33,7 +33,7 @@
 
 ;; DANTE: Do Aim Not To Expand.
 
-;; This is a mode to provide emacs interface for GHCi.  The mode
+;; This is a mode to provide Emacs interface for GHCi.  The mode
 ;; depends on GHCi only, keeping the logic simple.  Additionally it
 ;; aims to be minimal as far as possible.
 
@@ -277,7 +277,8 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 
 (defvar-local dante-interpreted nil)
 
-(defvar dante-original-buffer-map (make-hash-table :test 'equal) "Hash table from (local) temp file names to the file they originate")
+(defvar dante-original-buffer-map (make-hash-table :test 'equal)
+  "Hash table from (local) temp file names to the file they originate.")
 
 (lcr-def dante-async-load-current-buffer (interpret)
   "Load and maybe INTERPRET the temp file for current buffer.
@@ -802,11 +803,14 @@ CABAL-FILE rather than trying to locate one."
 
 (defcustom dante-tap-type-time nil
 "Delay after to display type of the thing at point, in seconds.
-Use nil to disable." :group 'dante)
+Use nil to disable." :type 'integer :group 'dante)
 (defvar dante-timer nil)
 (defvar dante-last-valid-idle-type-message nil)
 
+(defvar-local dante-idle-point nil "point when idler kicked in.")
+
 (defun dante-idle-function ()
+  "Eldoc-like support function."
   (when (and dante-mode ;; don't start GHCi if dante is not on.
              (dante-buffer-p) ;; buffer exists
              (with-current-buffer (dante-buffer-p)
