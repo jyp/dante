@@ -630,7 +630,7 @@ ACC umulate input and ERR-MSGS."
   (dante-debug 'outputs (format "\n[Dante] -> %s\n" cmd))
   (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n")))
 
-(lcr-def dante-async-call-chunks (cmd &optional func)
+(lcr-def dante-async-call (cmd &optional func)
   "Send GHCi the command string CMD.
 Each chuck of answer is passed to FUNC, the whole is returned."
   (with-current-buffer (dante-buffer-p) (dante-async-write cmd))
@@ -642,17 +642,6 @@ Each chuck of answer is passed to FUNC, the whole is returned."
         (setq acc (concat acc chunk)))
       (setq matched (string-match dante-ghci-prompt acc)))
     (s-trim-right (substring acc 0 (1- (match-beginning 1))))))
-
-(lcr-def dante-async-call (cmd)
-    "Send GHCi the command string CMD and return the answer in one chunk."
-    (with-current-buffer (dante-buffer-p)
-      (dante-async-write cmd)
-      (let ((acc "")
-            (matched nil))
-        (while (not matched)
-          (setq acc (concat acc (lcr-call dante-async-read)))
-          (setq matched (string-match dante-ghci-prompt acc)))
-        (s-trim-right (substring acc 0 (1- (match-beginning 1)))))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -869,7 +858,7 @@ BLOCK-END is a marker for the end of the evaluation block."
       (insert "-- ")
       (let ((insert-marker (point-marker)))
         (set-marker-insertion-type insert-marker t)
-        (lcr-cps-let ((res (dante-async-call-chunks cmd
+        (lcr-cps-let ((_res (dante-async-call cmd
           (lambda (chunk)
             (let ((cleaned (replace-regexp-in-string "\n+" "\n-- " (replace-regexp-in-string dante-ghci-prompt "" chunk t t))))
               (save-excursion
