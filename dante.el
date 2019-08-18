@@ -290,8 +290,9 @@ and over."
          (src-fname (buffer-file-name (current-buffer)))
          (fname (dante-temp-file-name (current-buffer)))
          (buffer (lcr-call dante-session))
-         (same-buffer (s-equals? (buffer-local-value 'dante-loaded-file buffer) src-fname)))
-    (if (and unchanged same-buffer (or dante-interpreted (not interpret))) ; see #52
+         (same-target (and (or dante-interpreted (not interpret))
+                       (s-equals? (buffer-local-value 'dante-loaded-file buffer) src-fname))))
+    (if (and unchanged same-target) ; see #52
         (buffer-local-value 'dante-load-message buffer)
       (setq dante-temp-epoch epoch)
       (setq dante-interpreted interpret)
@@ -300,7 +301,7 @@ and over."
       ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
       (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
       (with-current-buffer buffer
-        (dante-async-write (if (and (not interpret) same-buffer) ":r"
+        (dante-async-write (if same-target ":r"
                              (concat ":l " (if interpret "*" "") (dante-local-name fname))))
         (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
           (setq dante-loaded-file src-fname)
