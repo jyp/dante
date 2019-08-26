@@ -93,7 +93,7 @@ will be in different GHCi sessions."
 (defun dante-cabal-new-nix (d)
   "non-nil iff D contains a nix file and a cabal file."
   (and (directory-files d t "shell.nix\\|default.nix")
-       (directory-files d t "cabal.project")))
+       (directory-files d t "cabal.project.local")))
 
 (defun dante-cabal-nix (d)
   "non-nil iff D contains a nix file and a cabal file."
@@ -106,7 +106,7 @@ will be in different GHCi sessions."
     (new-nix dante-cabal-new-nix ("nix-shell" "--pure" "--run" (concat "cabal new-repl " (or dante-target (dante-package-name) "") " --builddir=dist/dante")))
     (nix dante-cabal-nix ("nix-shell" "--pure" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))
     (impure-nix dante-cabal-nix ("nix-shell" "--run" (concat "cabal repl " (or dante-target "") " --builddir=dist/dante")))
-    (new-build "cabal.project" ("cabal" "new-repl" (or dante-target (dante-package-name) nil) "--builddir=dist/dante"))
+    (new-build "cabal.project.local" ("cabal" "new-repl" (or dante-target (dante-package-name) nil) "--builddir=dist/dante"))
     (nix-ghci ,(lambda (d) (directory-files d t "shell.nix\\|default.nix")) ("nix-shell" "--pure" "--run" "ghci"))
     (stack "stack.yaml" ("stack" "repl" dante-target))
     (mafia "mafia" ("mafia" "repl" dante-target))
