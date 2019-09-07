@@ -152,6 +152,10 @@ otherwise search for project root using
   (or dante-project-root
       (progn (dante-initialize-method) dante-project-root)))
 
+(defun dante-checker-working-directory (checker)
+  "Get the directory to run checker in."
+  (declare (ignore checker))
+  (dante-project-root))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
@@ -329,7 +333,8 @@ and over."
 process."
   :start 'dante-check
   :predicate (lambda () dante-mode)
-  :modes '(haskell-mode literate-haskell-mode))
+  :modes '(haskell-mode literate-haskell-mode)
+  :working-directory #'dante-checker-working-directory)
 
 (add-to-list 'flycheck-checkers 'haskell-dante)
 
