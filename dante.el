@@ -153,11 +153,6 @@ otherwise search for project root using
   (or dante-project-root
       (progn (dante-initialize-method) dante-project-root)))
 
-(defun dante-checker-working-directory (checker)
-  "Get the directory to run checker in."
-  (declare (ignore checker))
-  (dante-project-root))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
@@ -335,7 +330,7 @@ process."
   :start 'dante-check
   :predicate (lambda () dante-mode)
   :modes '(haskell-mode literate-haskell-mode)
-  :working-directory #'dante-checker-working-directory)
+  :working-directory (lambda (_checker) (dante-project-root)))
 
 (add-to-list 'flycheck-checkers 'haskell-dante)
 
@@ -353,7 +348,7 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
       (flycheck-error-new-at (car location) (cadr location) type
                              (replace-regexp-in-string (regexp-quote temp-file)
                                                        (dante-buffer-file-name buffer)
-                                                       (concat fixed-err-type "\n" (s-trim-right msg)))
+                                                       (concat err-type "\n" (s-trim-right msg)))
                              :checker checker
                              :buffer buffer
                              :filename (if (string= temp-file file)
