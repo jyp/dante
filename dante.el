@@ -554,6 +554,7 @@ Note that sub-sessions are not interleaved."
                             ("-fdefer-typed-holes" "Accept typed holes, so that completion/type-at continues to work then.")
                             ("-fdefer-type-errors" "Accept incorrectly typed programs, so that completion/type-at continues to work then. (However errors in dependencies won't be detected as such)")
                             ("-Wwarn=missing-home-modules" "Do not error-out if a module is missing in .cabal file")
+                            ("-fdiagnostics-color=never" "No color codes in error messages")
                             ("-fno-diagnostics-show-caret" "Cleaner error messages for GHC >=8.2 (ignored by earlier versions)")))))
 
 (defun dante-start ()
