@@ -321,8 +321,7 @@ and over."
       (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer)))))
         (funcall cont
                  'finished
-                 (--remove (eq 'splice (flycheck-error-level it))
-                           (--map (dante-fly-message it checker (current-buffer) temp-file) messages)))))))
+                 (-non-nil (--map (dante-fly-message it checker (current-buffer) temp-file) messages)))))))
 
 (flycheck-define-generic-checker 'haskell-dante
   "A syntax and type checker for Haskell using a Dante worker
@@ -334,26 +333,31 @@ process."
 
 (add-to-list 'flycheck-checkers 'haskell-dante)
 
+(defcustom dante-flycheck-types
+  '(("^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" . error)
+    ("^warning" . warning)
+    ("^splicing " . nil)
+    ("" . error))
+  "Map of regular expressions to flycheck error types, ordered by priority."
+  :group 'dante :type '(repeat cons (regex symbol)))
+
 (defun dante-fly-message (matched checker buffer temp-file)
   "Convert the MATCHED message to flycheck format.
 CHECKER and BUFFER are added if the error is in TEMP-FILE."
   (cl-destructuring-bind (file location-raw err-type msg) matched
-    (let* ((type (cond
-                  ((s-matches? "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) 'error)
-                  ((s-matches? "^warning:" err-type) 'warning)
-                  ((s-matches? "^splicing " err-type) 'splice)
-                  (t 'error)))
+    (let* ((type (cdr (--first (s-matches? (car it) err-type) dante-flycheck-types)))
            (location (dante-parse-error-location location-raw)))
       ;; FIXME: sometimes the "error type" contains the actual error too.
-      (flycheck-error-new-at (car location) (cadr location) type
-                             (replace-regexp-in-string (regexp-quote temp-file)
-                                                       (dante-buffer-file-name buffer)
-                                                       (concat err-type "\n" (s-trim-right msg)))
-                             :checker checker
-                             :buffer buffer
-                             :filename (if (string= temp-file file)
-                                           (dante-buffer-file-name buffer)
-                                         file)))))
+      (when type
+        (flycheck-error-new-at (car location) (cadr location) type
+                               (replace-regexp-in-string (regexp-quote temp-file)
+                                                         (dante-buffer-file-name buffer)
+                                                         (concat err-type "\n" (s-trim-right msg)))
+                               :checker checker
+                               :buffer buffer
+                               :filename (if (string= temp-file file)
+                                             (dante-buffer-file-name buffer)
+                                           file))))))
 
 (defun dante-parse-error-location (string)
   "Parse the line/col numbers from the error in STRING."
