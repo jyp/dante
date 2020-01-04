@@ -355,7 +355,8 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
                                                          (concat err-type "\n" (s-trim-right msg)))
                                :checker checker
                                :buffer buffer
-                               :filename (if (string= temp-file file)
+                               :filename (if (string= (dante-canonicalize-path temp-file)
+                                                      (dante-canonicalize-path file))
                                              (dante-buffer-file-name buffer)
                                            file))))))
 
