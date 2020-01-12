@@ -481,32 +481,21 @@ The path returned is canonicalized and stripped of any text properties."
 
 (defun dante-canonicalize-path (path)
   "Return a standardized version of PATH.
-Path names are standardized and drive names are
-capitalized (relevant on Windows).  On Windows,
-forward slashes are also changed to backslashes."
+On Windows, forward slashes are changed to backslashes and the
+drive letter is capitalized."
   (let ((standard-path (convert-standard-filename path)))
-    (if (string= system-type "windows-nt")
-        ;; note that dante-capitalize-drive-letter finds the
-        ;; drive letter by looking for a string ":\\", so
-        ;; forward slashes must be converted to backslashes
-        ;; BEFORE capitalizing the drive letter
-        (dante-capitalize-drive-letter (dante-canonicalize-slashes standard-path))
-      (dante-capitalize-drive-letter standard-path))))
+    (if (eq system-type 'windows-nt)
+        (dante-capitalize-drive-letter (s-replace "/" "\\"))
+      standard-path)))
 
 (defun dante-capitalize-drive-letter (path)
   "Ensures the drive letter is capitalized in PATH.
-This applies to paths of the form
-x:\\foo\\bar (i.e., Windows)."
+This applies to paths of the form x:\\foo\\bar"
   (save-match-data
     (let ((drive-path (split-string path ":\\\\")))
       (if (or (null (car drive-path)) (null (cdr drive-path)))
           path
         (concat (upcase (car drive-path)) ":\\" (cadr drive-path))))))
-
-(defun dante-canonicalize-slashes (path)
-  "Convert all forward slashes to backslashes in PATH."
-  ;; from https://stackoverflow.com/a/1037749/7345298
-  (replace-regexp-in-string "/" "\\" path t t))
 
 ;;;;;;;;;;;;;;;;;;;;
 ;; GHCi formatting
