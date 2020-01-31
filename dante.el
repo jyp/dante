@@ -485,7 +485,7 @@ On Windows, forward slashes are changed to backslashes and the
 drive letter is capitalized."
   (let ((standard-path (convert-standard-filename path)))
     (if (eq system-type 'windows-nt)
-        (dante-capitalize-drive-letter (s-replace "/" "\\"))
+        (dante-capitalize-drive-letter (s-replace "/" "\\" standard-path))
       standard-path)))
 
 (defun dante-capitalize-drive-letter (path)
