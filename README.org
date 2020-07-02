@@ -118,12 +118,13 @@ change. With Emacs 26:
 
 *** Using dante + hlint
 
-You can activate the hlint checker in addition to the dante checker as follows:
+You can activate the hlint checker in addition to the dante checker by
+calling ~flycheck-add-next-checker~ appropriately, for example by
+adding a ~config~ section in the ~use-package dante~ call:
 
 #+BEGIN_SRC elisp
-(add-hook 'dante-mode-hook
-   '(lambda () (flycheck-add-next-checker 'haskell-dante
-                '(warning . haskell-hlint))))
+  :config
+  (flycheck-add-next-checker 'haskell-dante '(info . haskell-hlint))
 #+END_SRC
 
 ** Configuration
