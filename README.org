@@ -115,6 +115,8 @@ change. With Emacs 26:
 (setq auto-save-visited-interval 1)
 #+END_SRC
 
+If you want to see type of whatever is under the cursor at the moment as you move the cursor around, live, you can set `dante-tap-type-time` variable to number of seconds after which type information will appear in the minibuffer.
+
 
 *** Using dante + hlint
 
