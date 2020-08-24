@@ -101,7 +101,11 @@ will be in different GHCi sessions."
        (directory-files d t ".cabal$")))
 
 (defcustom dante-methods-alist
-  `((styx "styx.yaml" ("styx" "repl" dante-target))
+  `((new-flake-impure "flake.nix" ("nix" "develop" "--impure" "-c" "cabal" "v2-repl" (or dante-target (dante-package-name) #1="") "--builddir=dist/dante"))
+    (new-flake "flake.nix" ("nix" "develop" "-c" "cabal" "v2-repl" (or dante-target (dante-package-name) #1="") "--builddir=dist/dante"))
+    (flake-impure "flake.nix" ("nix" "develop" "--impure" "-c" "cabal" "v1-repl" (or dante-target (dante-package-name) #1="") "--builddir=dist/dante"))
+    (flake "flake.nix" ("nix" "develop" "-c" "cabal" "v1-repl" (or dante-target (dante-package-name) #1="") "--builddir=dist/dante"))
+    (styx "styx.yaml" ("styx" "repl" dante-target))
     ; (snack ,(lambda (d) (directory-files d t "package\\.\\(yaml\\|nix\\)")) ("snack" "ghci" dante-target)) ; too easy to trigger, confuses too many people.
     (new-impure-nix dante-cabal-new-nix ("nix-shell" "--run" (concat "cabal v2-repl " (or dante-target (dante-package-name) "") " --builddir=dist/dante")))
     (new-nix dante-cabal-new-nix ("nix-shell" "--pure" "--run" (concat "cabal v2-repl " (or dante-target (dante-package-name) "") " --builddir=dist/dante")))
