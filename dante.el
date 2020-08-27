@@ -930,9 +930,8 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
 Or nil if BUFFER / TEMP-FILE are not relevant to the message."
   (cl-destructuring-bind (file location-raw err-type msg) matched
     ;; Flymake bug: in fact, we would want to report all errors,
-    ;; with buffer = (find-buffer-visiting file), but flymake
-    ;; actually ignores the buffer argument of
-    ;; flymake-make-diagnostic (?!).
+    ;; with buffer = (if (string= temp-file file) buffer (find-buffer-visiting file)),
+    ;; but flymake actually ignores the buffer argument of flymake-make-diagnostic (?!).
     (when (string= temp-file file)
       (let* ((type (cond
                     ((s-matches? "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) :error)
