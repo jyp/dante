@@ -285,7 +285,7 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 (defvar dante-original-buffer-map (make-hash-table :test 'equal)
   "Hash table from (local) temp file names to the file they originate.")
 
-(lcr-def dante-async-load-current-buffer (interpret)
+(lcr-def dante-async-load-current-buffer (interpret err-fn)
   "Load and maybe INTERPRET the temp file for current buffer.
 Interpreting puts all symbols from the current module in
 scope. Compiling to avoids re-interpreting the dependencies over
@@ -308,7 +308,8 @@ and over."
       (with-current-buffer buffer
         (dante-async-write (if same-target ":r"
                              (concat ":l " (if interpret "*" "") (dante-local-name fname))))
-        (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil)
+        ;; (dante-debug 'misc (format "attempted-to-load with err-fn %s" err-fn))
+        (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil err-fn)
           (setq dante-loaded-file src-fname)
           (setq dante-load-message err-messages))))))
 
@@ -322,7 +323,7 @@ and over."
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
-    (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
+    (lcr-cps-let ((messages (dante-async-load-current-buffer nil nil)))
       (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer)))))
         (funcall cont
                  'finished
@@ -383,7 +384,7 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 
 (lcr-def dante-complete (prefix)
   (let ((imports (--filter (s-matches? "^import[ \t]+" it) (s-lines (buffer-string)))))
-    (lcr-call dante-async-load-current-buffer nil)
+    (lcr-call dante-async-load-current-buffer nil nil)
     (dolist (i imports)
       (lcr-call dante-async-call i)) ;; the file probably won't load when trying to complete. So, load all the imports instead.
     (let* ((reply (lcr-call dante-async-call (format ":complete repl %S" prefix)))
@@ -591,7 +592,7 @@ Note that sub-sessions are not interleaved."
 
 (defun dante-debug (category msg)
   "Append a debug message MSG to the current buffer if CATEGORY is enabled in `dante-debug'."
-  (when (memq category dante-debug)
+  (when (or t (memq category dante-debug))
     (goto-char (point-max))
     (insert msg)))
 
@@ -611,7 +612,7 @@ Must be called from GHCi process buffer."
   "Return a regexp matching any of REGEXPS."
   (s-join "\\|" regexps))
 
-(lcr-def dante-load-loop (acc err-msgs)
+(lcr-def dante-load-loop (acc err-msgs err-fn)
   "Parse the output of load command.
 ACC umulate input and ERR-MSGS."
   (setq dante-state 'loading)
@@ -635,11 +636,14 @@ ACC umulate input and ERR-MSGS."
                ;; With the +c setting, GHC (8.2) prints: 1. error
                ;; messages+warnings, if compiling only 2. if successful,
                ;; repeat the warnings
-               (cl-destructuring-bind (_status warning-msgs loaded-mods) (lcr-call dante-load-loop rest nil)
+               (cl-destructuring-bind (_status warning-msgs loaded-mods) (lcr-call dante-load-loop rest nil nil)
                  (setq dante-state (list 'loaded loaded-mods))
                  (setq result (list 'ok (or (nreverse err-msgs) warning-msgs) loaded-mods))))
               ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
-               (push (-take 4 (cdr (s-match err-regexp m))) err-msgs))
+               (let ((err-msg (-take 4 (cdr (s-match err-regexp m)))))
+                 (push err-msg err-msgs)
+                 (when err-fn (funcall err-fn err-msg))
+                 ))
               (t (setq rest (concat acc (lcr-call dante-async-read)))))
         (setq acc rest)))
     result))
@@ -802,14 +806,14 @@ CABAL-FILE rather than trying to locate one."
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (lcr-cps-let ((ret (lcr-blocking-call))
-                  (_load_messages (dante-async-load-current-buffer nil))
+                  (_load_messages (dante-async-load-current-buffer nil nil))
                   (target (dante-async-call (concat ":loc-at " symbol))))
     (let ((xrefs (dante--make-xrefs target)))
       (funcall ret xrefs))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
   (lcr-cps-let ((ret (lcr-blocking-call))
-                  (_load_messages (dante-async-load-current-buffer nil))
+                  (_load_messages (dante-async-load-current-buffer nil nil))
                   (result (dante-async-call (concat ":uses " symbol))))
     (let ((xrefs (dante--make-xrefs result)))
       (funcall ret xrefs))))
@@ -837,7 +841,7 @@ Use nil to disable." :type 'integer :group 'dante)
     (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
       (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap)) ;; not in a comment or string
         (setq-local dante-idle-point (point))
-        (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t))
+        (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t nil))
                         (ty (dante-async-call (concat ":type-at " tap))))
           (when (and (let ((cur-msg (current-message)))
                        (or (not cur-msg)
@@ -884,7 +888,7 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
   (let ((block-end (save-excursion (while (looking-at "[ \t]*--") (forward-line)) (point-marker))))
     (while (looking-at "[ \t]*--") (forward-line -1))
     (forward-line)
-    (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t)))
+    (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t nil)))
       (dante-eval-loop block-end))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -893,19 +897,24 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
 
 (defun dante-flymake (report-fn &rest _args)
   "Run a check and pass the status onto REPORT-FN."
-  (let ((buffer (dante-buffer-p)))
+  ;; TODO: delete any pending typecheck request. (Complicated because we need a special queue)
+  (let ((buffer (dante-buffer-p))
+        (src-buffer (current-buffer)))
     (with-current-buffer buffer (setq dante-flymake-current (1+ dante-flymake-current)))
-    (let ((dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer)))
-      (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
-        (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
-          (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer))))
-                 (diags (-non-nil (--map (dante-fm-message it (current-buffer) temp-file) messages))))
-            (with-current-buffer buffer (dante-debug 'flymake (format "Considering reporting for %s (%s)" dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer) )))
-            (when (eq (buffer-local-value 'dante-flymake-current buffer) dante-flymake-this-session)
-              ;; flymake does not want us to report messages for an "old" request
-              (with-current-buffer buffer (dante-debug 'flymake (format "Reporting %s messages" (length diags))))
-              (funcall report-fn diags))))))))
-
+    
+    (let* ((dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer))
+           (temp-file (dante-local-name (dante-temp-file-name src-buffer)))
+           (proxy-fn (lambda (msgs)
+                      (with-current-buffer buffer
+                        (dante-debug 'flymake (format "Considering reporting for %s (%s)" dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer))))
+                      (when (eq (buffer-local-value 'dante-flymake-current buffer) dante-flymake-this-session)
+                        (funcall report-fn msgs)))))
+      (if (eq (dante-get-var 'dante-state) 'dead)
+          (funcall report-fn :panic :explanation "Ghci is dead")
+        (lcr-cps-let ((_messages (dante-async-load-current-buffer
+                                  nil
+                                  (lambda (raw-msg) (funcall proxy-fn (-non-nil (list (dante-fm-message raw-msg src-buffer temp-file))))))))
+        (funcall proxy-fn nil))))))
 
 (defun dante-pos-at-line-col (buf l c)
   "Translate line L and column C into a position within BUF."
