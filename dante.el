@@ -160,6 +160,7 @@ otherwise search for project root using
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
+(defvar-local dante-flymake-current 1000)
 (defvar-local dante-command-line nil "command line used to start GHCi")
 (defvar-local dante-load-message nil "load messages")
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
@@ -889,13 +890,22 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flymake
 
+
 (defun dante-flymake (report-fn &rest _args)
   "Run a check and pass the status onto REPORT-FN."
-  (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
-    (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
-      (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer))))
-             (diags (-non-nil (--map (dante-fm-message it (current-buffer) temp-file) messages))))
-        (funcall report-fn diags)))))
+  (let ((buffer (dante-buffer-p)))
+    (with-current-buffer buffer (setq dante-flymake-current (1+ dante-flymake-current)))
+    (let ((dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer)))
+      (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
+        (lcr-cps-let ((messages (dante-async-load-current-buffer nil)))
+          (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer))))
+                 (diags (-non-nil (--map (dante-fm-message it (current-buffer) temp-file) messages))))
+            (with-current-buffer buffer (dante-debug 'flymake (format "Considering reporting for %s (%s)" dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer) )))
+            (when (eq (buffer-local-value 'dante-flymake-current buffer) dante-flymake-this-session)
+              ;; flymake does not want us to report messages for an "old" request
+              (with-current-buffer buffer (dante-debug 'flymake (format "Reporting %s messages" (length diags))))
+              (funcall report-fn diags))))))))
+
 
 (defun dante-pos-at-line-col (buf l c)
   "Translate line L and column C into a position within BUF."
