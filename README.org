@@ -73,7 +73,7 @@ Any GHCi command can be put in such a block, but note however that:
 So if your goal is run your webserver/database/etc. within GHCi, you
 should not do it using dante.
 
-*** (†) Tramp
+*** Tramp
 If programs such as ~nix-shell~ are not found on the remote host, you
 may need to ajust the tramp path. For example:
 #+BEGIN_SRC elisp
@@ -90,32 +90,19 @@ Turn on Dante in your ~haskell-mode-hook~. I recommend:
     :commands 'dante-mode
     :init
     (add-hook 'haskell-mode-hook 'flycheck-mode)
-    ;; OR:
-    ;; (add-hook 'haskell-mode-hook 'flymake-mode)
+    ;; OR for flymake support:
+    (add-hook 'haskell-mode-hook 'flymake-mode)
+    (remove-hook 'flymake-diagnostic-functions 'flymake-proc-legacy-flymake)
+
     (add-hook 'haskell-mode-hook 'dante-mode)
     )
 #+END_SRC
 
-(†) Dante can only check *saved* buffers. Therefore, it will save the
-current buffer every time that a check is triggered. To avoid any
-surprise (and a bug where GHCi does not see file changes), you may
-want to disable checks on idle after change:
 
-#+BEGIN_SRC elisp
-(setq flymake-no-changes-timeout nil)
-(setq flymake-start-syntax-check-on-newline nil)
-(setq flycheck-check-syntax-automatically '(save mode-enabled))
-#+END_SRC
-
-You may additionally want to save buffer after some idle time after a
-change. With Emacs 26:
-
-#+BEGIN_SRC elisp
-(auto-save-visited-mode 1)
-(setq auto-save-visited-interval 1)
-#+END_SRC
-
-If you want to see type of whatever is under the cursor at the moment as you move the cursor around, live, you can set `dante-tap-type-time` variable to number of seconds after which type information will appear in the minibuffer.
+If you want to see type of whatever is under the cursor at the moment
+as you move the cursor around, live, you can set `dante-tap-type-time`
+variable to number of seconds after which type information will appear
+in the minibuffer.
 
 
 *** Using dante + hlint
