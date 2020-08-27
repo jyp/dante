@@ -897,6 +897,7 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
 
 (defun dante-flymake (report-fn &rest _args)
   "Run a check and pass the status onto REPORT-FN."
+  (setq next-error-function (lambda () (flymake-goto-next-error)))
   ;; TODO: delete any pending typecheck request. (Complicated because we need a special queue)
   (let ((buffer (dante-buffer-p))
         (src-buffer (current-buffer)))
