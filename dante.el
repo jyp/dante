@@ -556,7 +556,7 @@ Note that sub-sessions are not interleaved."
   (with-current-buffer buffer
     (if lcr-process-callback (force-mode-line-update t)
       (let ((req (pop dante-queue)))
-        (when req (funcall req buffer))))))
+        (if req (funcall req buffer) (dante-set-state 'ready))))))
 
 (defcustom dante-load-flags '("+c" "-fdiagnostics-color=never" "-fno-diagnostics-show-caret" "-Wwarn=missing-home-modules" "-ferror-spans" )
   "Flags to set whenever GHCi is started."
@@ -897,24 +897,23 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
 
 (defun dante-flymake (report-fn &rest _args)
   "Run a check and pass the status onto REPORT-FN."
-  (setq next-error-function (lambda (arg _reset) (flymake-goto-next-error arg nil t)))
   ;; TODO: delete any pending flymake request. (Complicated because we need a special queue)
-  (let ((src-buffer (current-buffer)))
-    (lcr-cps-let ((buffer (dante-session)))
-      (with-current-buffer buffer (setq dante-flymake-current (1+ dante-flymake-current)))
-      (let* ((dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer))
-             (temp-file (dante-local-name (dante-temp-file-name src-buffer)))
-             (proxy-fn (lambda (msgs)
-                         (with-current-buffer buffer
-                           (dante-debug 'flymake (format "Considering reporting for %s (%s)" dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer))))
-                         (when (eq (buffer-local-value 'dante-flymake-current buffer) dante-flymake-this-session)
-                           (funcall report-fn msgs)))))
-        (if (eq (dante-get-var 'dante-state) 'dead)
-            (funcall report-fn :panic :explanation "Ghci is dead")
-          (lcr-cps-let ((_messages (dante-async-load-current-buffer
-                                    nil
-                                    (lambda (raw-msg) (funcall proxy-fn (-non-nil (list (dante-fm-message raw-msg src-buffer temp-file))))))))
-            (funcall proxy-fn nil)))))))
+  (lcr-cps-let ((buffer (dante-session)))
+    (with-current-buffer buffer (setq dante-flymake-current (1+ dante-flymake-current)))
+    (let* ((dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer))
+           (src-buffer (current-buffer))
+           (temp-file (dante-local-name (dante-temp-file-name src-buffer)))
+           (proxy-fn (lambda (msgs)
+                       (with-current-buffer buffer
+                         (dante-debug 'flymake (format "Considering reporting for %s (%s)" dante-flymake-this-session (buffer-local-value 'dante-flymake-current buffer))))
+                       (when (eq (buffer-local-value 'dante-flymake-current buffer) dante-flymake-this-session)
+                         (funcall report-fn msgs)))))
+      (if (eq (dante-get-var 'dante-state) 'dead)
+          (funcall report-fn :panic :explanation "Ghci is dead")
+        (lcr-cps-let ((_messages (dante-async-load-current-buffer
+                                  nil
+                                  (lambda (raw-msg) (funcall proxy-fn (-non-nil (list (dante-fm-message raw-msg src-buffer temp-file))))))))
+          (funcall proxy-fn nil))))))
 
 (defun dante-pos-at-line-col (buf l c)
   "Translate line L and column C into a position within BUF."
