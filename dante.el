@@ -250,7 +250,7 @@ If `haskell-mode' is not loaded, just return EXPRESSION."
 When the universal argument INSERT is non-nil, insert the type in the buffer."
   (interactive "P")
   (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
-    (lcr-cps-let ((_load_messages (dante-async-load-current-buffer nil))
+    (lcr-cps-let ((_load_messages (dante-async-load-current-buffer nil nil))
                     (ty (dante-async-call (concat ":type-at " tap))))
       (if insert (save-excursion (goto-char (line-beginning-position))
                                  (insert (dante-fontify-expression ty) "\n"))
@@ -262,7 +262,7 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
   (let ((package (dante-package-name))
         (help-xref-following nil)
         (origin (buffer-name)))
-    (lcr-cps-let ((_load-message (dante-async-load-current-buffer t))
+    (lcr-cps-let ((_load-message (dante-async-load-current-buffer t nil))
                     (info (dante-async-call (format ":i %s" ident))))
       (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                        (called-interactively-p 'interactive))
