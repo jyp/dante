@@ -554,9 +554,10 @@ This applies to paths of the form x:\\foo\\bar"
 Note that sub-sessions are not interleaved."
   (lcr-scheduler)
   (with-current-buffer buffer
-    (if lcr-process-callback (force-mode-line-update t)
+    (force-mode-line-update t)
+    (when lcr-process-callback 
       (let ((req (pop dante-queue)))
-        (if req (funcall req buffer) (dante-set-state 'ready))))))
+        (when req (funcall req buffer))))))
 
 (defcustom dante-load-flags '("+c" "-fdiagnostics-color=never" "-fno-diagnostics-show-caret" "-Wwarn=missing-home-modules" "-ferror-spans" )
   "Flags to set whenever GHCi is started."
