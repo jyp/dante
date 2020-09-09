@@ -555,7 +555,7 @@ Note that sub-sessions are not interleaved."
   (lcr-scheduler)
   (with-current-buffer buffer
     (force-mode-line-update t)
-    (when lcr-process-callback 
+    (unless lcr-process-callback
       (let ((req (pop dante-queue)))
         (when req (funcall req buffer))))))
 
