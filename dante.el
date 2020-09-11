@@ -928,24 +928,27 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
 (defun dante-fm-message (matched buffer temp-file)
   "Convert the MATCHED message to flymake format.
 Or nil if BUFFER / TEMP-FILE are not relevant to the message."
-  (cl-destructuring-bind (file location-raw err-type msg) matched
+  (cl-destructuring-bind (file location-raw first-line msg) matched
     ;; Flymake bug: in fact, we would want to report all errors,
     ;; with buffer = (if (string= temp-file file) buffer (find-buffer-visiting file)),
     ;; but flymake actually ignores the buffer argument of flymake-make-diagnostic (?!).
     (when (string= temp-file file)
-      (let* ((type (cond
-                    ((s-matches? "^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" err-type) :error)
-                    ((s-matches? "^warning:" err-type) :warning)
-                    ((s-matches? "^splicing " err-type) :splice)
-                    (t :error)))
+      (let* ((type-analysis
+              (cl-destructuring-bind (typ msg-start) (s-split-up-to ":" first-line 1) 
+                (cond ((string-equal typ "warning")
+                       (if (s-matches? "\\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" msg-start)
+                           (list :error "")
+                         (list :warning "")))
+                      ((string-equal typ "splicing") (list :info ""))
+                      (t (list :error msg-start)))))
              (location (dante-parse-error-location location-raw))
              (r (pcase location
                   (`(,l1 ,c1 ,l2 ,c2) (cons (dante-pos-at-line-col buffer l1 c1) (dante-pos-at-line-col buffer (or l2 l1) (1+ c2))))
                   (`(,l ,c) (flymake-diag-region buffer l c)))))
-        ;; FIXME: sometimes the "error type" contains the actual error too.
         (when r
-          (flymake-make-diagnostic buffer (car r) (cdr r)
-                                   type (s-trim-right (replace-regexp-in-string "^    " "" msg))))))))
+          (cl-destructuring-bind (type msg-first-line) type-analysis
+            (let* ((final-msg (s-trim (concat msg-first-line "\n" (replace-regexp-in-string "^    " "" msg)))))
+              (flymake-make-diagnostic buffer (car r) (cdr r) type final-msg))))))))
 
 (provide 'dante)
 
