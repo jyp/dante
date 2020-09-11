@@ -591,18 +591,18 @@ Note that sub-sessions are not interleaved."
       (set-process-sentinel process 'dante-sentinel)
       buffer))
 
-(defun dante-debug (category msg)
+(defun dante-debug (category msg &rest objects)
   "Append a debug message MSG to the current buffer if CATEGORY is enabled in `dante-debug'."
   (when (or t (memq category dante-debug))
     (goto-char (point-max))
-    (insert msg)))
+    (insert (apply 'format msg objects))))
 
 (defun dante-async-read (cont)
   "Install CONT as a callback for an unknown portion GHCi output.
 Must be called from GHCi process buffer."
   (let ((buffer (current-buffer)))
     (lcr-cps-let ((input (lcr-process-read buffer)))
-      (dante-debug 'inputs input)
+      (dante-debug 'inputs "%s" input)
       (funcall cont (s-replace "\r" "" input))
       (dante-schedule-next buffer)))
   (force-mode-line-update t))
@@ -650,7 +650,7 @@ ACC umulate input and ERR-MSGS."
 
 (defun dante-async-write (cmd)
   "Write to GHCi associated with current buffer the CMD."
-  (dante-debug 'outputs (format "\n[Dante] -> %s\n" cmd))
+  (dante-debug 'outputs "\n[Dante] -> %s\n" cmd)
   (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n")))
 
 (lcr-def dante-async-call (cmd)
