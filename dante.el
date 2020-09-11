@@ -308,7 +308,6 @@ and over."
       (with-current-buffer buffer
         (dante-async-write (if same-target ":r"
                              (concat ":l " (if interpret "*" "") (dante-local-name fname))))
-        ;; (dante-debug 'misc (format "attempted-to-load with err-fn %s" err-fn))
         (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil err-fn)
           (setq dante-loaded-file src-fname)
           (setq dante-load-message err-messages))))))
@@ -593,8 +592,8 @@ Note that sub-sessions are not interleaved."
 
 (defun dante-debug (category msg &rest objects)
   "Append a debug message MSG to the current buffer if CATEGORY is enabled in `dante-debug'."
-  (when (or t (memq category dante-debug))
-    (goto-char (point-max))
+  (when (memq category dante-debug)
+    (goto-char (1- (point-max)))
     (insert (apply 'format msg objects))))
 
 (defun dante-async-read (cont)
@@ -902,14 +901,20 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
          (temp-file (dante-local-name (dante-temp-file-name src-buffer)))
          (local-token (with-current-buffer buffer (setq dante-flymake-token (1+ dante-flymake-token))))
          (token-guard (lambda () (eq (buffer-local-value 'dante-flymake-token buffer) local-token))) ;; macrolet would be better
-         (msg-fn (lambda (raw-msg) (when (funcall token-guard)
-                                     (funcall report-fn (-non-nil (list (dante-fm-message raw-msg src-buffer temp-file))))))))
+         (rep-fn (lambda (msg) (when (funcall token-guard) (report-fn msg))))
+         (nothing-done t)
+         (msg-fn (lambda (raw-msg)
+                   (when (funcall token-guard)
+                     (setq nothing-done nil)
+                     (funcall report-fn (-non-nil (list (dante-fm-message raw-msg src-buffer temp-file))))))))
     (with-current-buffer src-buffer ; (dante-start) may have switched buffer
       (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
         (lcr-cps-let ((_ (dante-session))) ; yield until GHCi is ready to process the request
           (when (funcall token-guard) ; don't try to load if we're too late.
-            (lcr-cps-let ((_messages (dante-async-load-current-buffer nil msg-fn)))
-              (when (funcall token-guard) (funcall report-fn nil))))))))) ; in case there is no error, this clears previous messages
+            (lcr-cps-let ((messages (dante-async-load-current-buffer nil msg-fn)))
+              (when (and nothing-done (funcall token-guard))
+                (funcall report-fn messages)))))))))
+                                        ; clears previous messages and deals with #52
 
 (defun dante-pos-at-line-col (buf l c)
   "Translate line L and column C into a position within BUF."
