@@ -642,7 +642,7 @@ ACC umulate input and ERR-MSGS."
               ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
                (let ((err-msg (-take 4 (cdr (s-match err-regexp m)))))
                  (push err-msg err-msgs)
-                 (when err-fn (funcall err-fn err-msg))))
+                 (when err-fn (funcall err-fn (list err-msg)))))
               (t (setq rest (concat acc (lcr-call dante-async-read)))))
         (setq acc rest)))
     result))
@@ -901,20 +901,18 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
          (temp-file (dante-local-name (dante-temp-file-name src-buffer)))
          (local-token (with-current-buffer buffer (setq dante-flymake-token (1+ dante-flymake-token))))
          (token-guard (lambda () (eq (buffer-local-value 'dante-flymake-token buffer) local-token))) ;; macrolet would be better
-         (rep-fn (lambda (msg) (when (funcall token-guard) (report-fn msg))))
          (nothing-done t)
-         (msg-fn (lambda (raw-msg)
+         (msg-fn (lambda (messages)
                    (when (funcall token-guard)
                      (setq nothing-done nil)
-                     (funcall report-fn (-non-nil (list (dante-fm-message raw-msg src-buffer temp-file))))))))
+                     (funcall report-fn (-non-nil (--map (dante-fm-message it src-buffer temp-file) messages)))))))
     (with-current-buffer src-buffer ; (dante-start) may have switched buffer
       (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
         (lcr-cps-let ((_ (dante-session))) ; yield until GHCi is ready to process the request
           (when (funcall token-guard) ; don't try to load if we're too late.
             (lcr-cps-let ((messages (dante-async-load-current-buffer nil msg-fn)))
-              (when (and nothing-done (funcall token-guard))
-                (funcall report-fn messages)))))))))
-                                        ; clears previous messages and deals with #52
+              (when nothing-done ; clears previous messages and deals with #52
+                (funcall msg-fn messages)))))))))
 
 (defun dante-pos-at-line-col (buf l c)
   "Translate line L and column C into a position within BUF."
