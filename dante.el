@@ -9,6 +9,8 @@
 ;; Author: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 ;; Maintainer: Jean-Philippe Bernardy <jeanphilippe.bernardy@gmail.com>
 ;; URL: https://github.com/jyp/dante
+;; Package-Version: 20200921.723
+;; Package-Commit: e2acbf6dd37818cbf479c9c3503d8a59192e34af
 ;; Created: October 2016
 ;; Keywords: haskell, tools
 ;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.0"))
@@ -381,8 +383,23 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Company integration (auto-completion)
 
+(defun check-balanced-parens (opened str)
+  "Check that all parenthesis are balanced"
+  (cond
+   ((string-empty-p str) (= 0 opened))
+   ((< opened 0) nil)
+   (t (let ((head (substring str 0 1))
+            (tail (substring str 1 (length str))))
+        (check-balanced-parens (cond ((string= head "(") (+ opened 1))
+                                     ((string= head ")") (- opened 1))
+                                     (t opened))
+                               tail)))))
+
 (lcr-def dante-complete (prefix)
-  (let ((imports (--filter (s-matches? "^import[ \t]+" it) (s-lines (buffer-string)))))
+  (let ((imports
+         (--filter (and (s-matches? "^import[ \t]+" it)
+                        (check-balanced-parens 0 it))
+                   (s-lines (buffer-string)))))
     (lcr-call dante-async-load-current-buffer nil nil)
     (dolist (i imports)
       (lcr-call dante-async-call i)) ;; the file probably won't load when trying to complete. So, load all the imports instead.
