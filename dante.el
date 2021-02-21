@@ -908,6 +908,7 @@ Calls DONE when done.  BLOCK-END is a marker for the end of the evaluation block
 (defun dante-eval-block ()
   "Evaluate the expression command(s) found after in the current command block >>> and insert the results."
   (interactive)
+  (push-mark)
   (beginning-of-line)
   (let ((block-end (save-excursion (while (looking-at "[ \t]*--") (forward-line)) (point-marker))))
     (while (looking-at "[ \t]*--") (forward-line -1))
