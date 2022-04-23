@@ -819,15 +819,16 @@ CABAL-FILE rather than trying to locate one."
   (if (not (and file (file-readable-p file)))
       (--map (xref-make "<unreadable>" it) spans)
     (let* ((lines (s-lines (f-read file)))
-           (wanted (--map (1- (oref it line)) spans))
+           (wanted (--map (1- (xref-file-location-line it)) spans))
            (lines (-select-by-indices wanted lines)))
       (-zip-with #'xref-make lines spans))))
 
 (defun dante--make-xrefs (string)
   "Make xref objects for the source spans in STRING."
   (--mapcat (funcall #'dante--summarize-src-spans (cdr it) (car it))
-            (--group-by (oref it file) (-non-nil (-map #'dante--match-src-span
-                                                       (s-lines string))))))
+            (--group-by (xref-file-location-file it file)
+                        (-non-nil (-map #'dante--match-src-span
+                                        (s-lines string))))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (lcr-cps-let ((ret (lcr-blocking-call))
