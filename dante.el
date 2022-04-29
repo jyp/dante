@@ -826,7 +826,7 @@ CABAL-FILE rather than trying to locate one."
 (defun dante--make-xrefs (string)
   "Make xref objects for the source spans in STRING."
   (--mapcat (funcall #'dante--summarize-src-spans (cdr it) (car it))
-            (--group-by (xref-file-location-file it file)
+            (--group-by (xref-file-location-file it)
                         (-non-nil (-map #'dante--match-src-span
                                         (s-lines string))))))
 
