@@ -718,7 +718,7 @@ This is a standard process sentinel function."
 (defun dante-show-process-problem (process change)
   "Report to the user that PROCESS reported CHANGE, causing it to end."
   (message "Problem with GHCi process!")
-  (switch-to-buffer (process-buffer process))
+  (display-buffer (process-buffer process) 'display-buffer-pop-up-window)
   (goto-char (point-max))
   (insert "\n---\n\n")
   (insert
