@@ -165,7 +165,7 @@ otherwise search for project root using
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
-(defvar-local dante-flymake-token 1000)
+(defvar-local dante-flymake-token 1000) ;; TODO: obsolete
 (defvar-local dante-command-line nil "Command line used to start GHCi.")
 (defvar-local dante-load-message nil "Load messages.")
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
@@ -303,6 +303,7 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 Interpreting puts all symbols from the current module in
 scope.  Compiling to avoids re-interpreting the dependencies over
 and over."
+  (message "dante-async-load-current-buffer!")
   (let* ((epoch (buffer-modified-tick))
          (unchanged (equal epoch dante-temp-epoch))
          (src-fname (buffer-file-name (current-buffer)))
@@ -321,7 +322,8 @@ and over."
       (with-current-buffer buffer
         (dante-async-write (if same-target ":r"
                              (concat ":l " (if interpret "*" "") (dante-local-name fname))))
-        (cl-destructuring-bind (_status err-messages _loaded-modules) (lcr-call dante-load-loop "" nil err-fn)
+        (cl-destructuring-bind (_status err-messages _loaded-modules)
+            (lcr-call dante-load-loop "" nil err-fn)
           (setq dante-loaded-file src-fname)
           (setq dante-load-message err-messages))))))
 
@@ -572,12 +574,21 @@ This applies to paths of the form x:\\foo\\bar"
     (dante-destroy)
     (lcr-cps-let ((_ (dante-session))))))
 
-(defun dante-session (continue)
-  "Start a GHCi session and CONTINUE.  (`lcr')."
-  (lcr-context-switch
-      (with-current-buffer (or (dante-buffer-p) (dante-start))
-        (push (lambda (buffer) (lcr-resume continue buffer)) dante-queue)
-        (dante-schedule-next (current-buffer)))))
+(lcr-def dante-session ()
+  "Start a GHCi session if none exists."
+  (message "dante session")
+  (or (dante-buffer-p)
+      (lcr-call dante-start)))
+
+(lcr-def dante-soft-session ()
+  "Start a session and continue only when it is idle or new."
+  (if-let* ((buf (dante-buffer-p))
+            )
+      (if (buffer-local-value 'lcr-process-callback buf)
+          (lcr-call lcr-abort)
+        (message "dante-soft-session: normal case %s" buf)
+        buf)
+    (lcr-call dante-start)))
 
 (defun dante-schedule-next (buffer)
   "If no sub-session is running, run the next queued sub-session for BUFFER.
@@ -601,25 +612,30 @@ If the queue is empty, do nothing.  Note that sub-sessions are not interleaved."
                             ("-fdiagnostics-color=never" "No color codes in error messages (color codes will trigger bugs in Dante)")
                             ("-fno-diagnostics-show-caret" "Cleaner error messages for GHC >=8.2 (ignored by earlier versions)")))))
 
-(defun dante-start ()
-  "Start a GHCi process and return its buffer."
-  (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
-         (buffer (dante-buffer-create))
-         (process (with-current-buffer buffer
-                    (message "Dante: Starting GHCi: %s" (combine-and-quote-strings args))
-                    (apply #'start-file-process "dante" buffer args))))
-      (set-process-query-on-exit-flag process nil)
-      (with-current-buffer buffer
-        (erase-buffer)
-        (setq-local dante-command-line (process-command process)))
-      (dante-set-state 'starting)
-      (lcr-cps-let
-          ((_start-messages
-            (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
-        (dante-set-state 'running))
-      (lcr-process-initialize buffer)
-      (set-process-sentinel process 'dante-sentinel)
-      buffer))
+(defun dante-start (continue)
+  "Start a GHCi process and return its buffer.
+Call CONTINUE with dante buffer."
+  (lcr-context-switch
+      (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
+             (buffer (dante-buffer-create))
+             (process (with-current-buffer buffer
+                        (message "Dante: Starting GHCi: %s" (combine-and-quote-strings args))
+                        (apply #'start-file-process "dante" buffer args))))
+        (set-process-query-on-exit-flag process nil)
+        (with-current-buffer buffer
+          (erase-buffer)
+          (setq-local dante-command-line (process-command process)))
+        (dante-set-state 'starting)
+        (lcr-cps-let
+            ((_start-messages
+              (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
+          (dante-set-state 'running)
+          (message "Started with buf: %s" buffer)
+          ;; (lcr-resume continue buffer)
+          )
+        (lcr-process-initialize buffer)
+        (set-process-sentinel process 'dante-sentinel)
+        buffer)))
 
 (defun dante-debug (category msg &rest objects)
   "Append a debug message MSG to the current buffer.
@@ -685,15 +701,15 @@ ACC umulate input and ERR-MSGS."
   (process-send-string (get-buffer-process (current-buffer)) (concat cmd "\n")))
 
 (lcr-def dante-async-call (cmd)
-    "Send GHCi the command string CMD and return the answer."
-    (with-current-buffer (dante-buffer-p)
-      (dante-async-write cmd)
-      (let ((acc "")
-            (matched nil))
-        (while (not matched)
-          (setq acc (concat acc (lcr-call dante-async-read)))
-          (setq matched (string-match dante-ghci-prompt acc)))
-        (s-trim-right (substring acc 0 (1- (match-beginning 1)))))))
+  "Send GHCi the command string CMD and return the answer."
+  (with-current-buffer (dante-buffer-p)
+    (dante-async-write cmd)
+    (let ((acc "")
+          (matched nil))
+      (while (not matched)
+        (setq acc (concat acc (lcr-call dante-async-read)))
+        (setq matched (string-match dante-ghci-prompt acc)))
+      (s-trim-right (substring acc 0 (1- (match-beginning 1)))))))
 
 (defun dante-sentinel (process change)
   "Handle when PROCESS reports a CHANGE.
@@ -936,22 +952,19 @@ The command block is indicated by the >>> symbol."
 (defun dante-flymake (report-fn &rest _args)
   "Run a check and pass the status onto REPORT-FN."
   (let* ((src-buffer (current-buffer))
-         (buffer (or (dante-buffer-p) (dante-start))) ; get the GHCi session without yielding
          (temp-file (dante-local-name (dante-temp-file-name src-buffer)))
-         (local-token (with-current-buffer buffer (setq dante-flymake-token (1+ dante-flymake-token))))
-         (token-guard (lambda () (eq (buffer-local-value 'dante-flymake-token buffer) local-token))) ;; macrolet would be better
-         (nothing-done t)
-         (msg-fn (lambda (messages)
-                   (when (funcall token-guard)
-                     (setq nothing-done nil)
-                     (funcall report-fn (-non-nil (--map (dante-fm-message it src-buffer temp-file) messages)))))))
-    (with-current-buffer src-buffer ; (dante-start) may have switched buffer
-      (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
-        (lcr-cps-let ((_ (dante-session))) ; yield until GHCi is ready to process the request
-          (when (funcall token-guard) ; don't try to load if we're too late.
-            (lcr-cps-let ((messages (dante-async-load-current-buffer nil msg-fn)))
-              (when nothing-done ; clears previous messages and deals with #52
-                (funcall msg-fn messages)))))))))
+         (nothing-done t))
+    (let ((msg-fn (lambda (messages)
+                   (setq nothing-done nil)
+                   (message "msg-fn Reporting: %s" messages)
+                   (funcall report-fn
+                            (-non-nil
+                             (--map (dante-fm-message it src-buffer temp-file) messages))))))
+      (lcr-cps-let ((_ (dante-soft-session)) ; yield until GHCi is ready to process the request
+                    ((messages (dante-async-load-current-buffer nil msg-fn))))
+        (message "loaded!!! nothing done:%s" nothing-done)
+        (when nothing-done ; clears previous messages and deals with #52
+          (funcall msg-fn messages))))))
 
 (defun dante-pos-at-line-col (buf l c)
   "Translate line L and column C into a position within BUF."
