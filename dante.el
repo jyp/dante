@@ -575,18 +575,20 @@ This applies to paths of the form x:\\foo\\bar"
     (lcr-cps-let ((_ (dante-session))))))
 
 (lcr-def dante-session ()
-  "Start a GHCi session if none exists."
-  (message "dante session")
+  "Get the session or create one if none exists."
   (or (dante-buffer-p)
       (lcr-call dante-start)))
 
+(defun dante-abort (_cont)
+  "Abort by not calling CONT."
+  (message "Dante: not queueing request; too busy right now"))
+
 (lcr-def dante-soft-session ()
-  "Start a session and continue only when it is idle or new."
-  (if-let* ((buf (dante-buffer-p))
-            )
+  "If idle, get the session.
+Create a session if none exists.  Abort if there is a busy session."
+  (if-let* ((buf (dante-buffer-p)))
       (if (buffer-local-value 'lcr-process-callback buf)
-          (lcr-call lcr-abort)
-        (message "dante-soft-session: normal case %s" buf)
+          (lcr-call dante-abort)
         buf)
     (lcr-call dante-start)))
 
@@ -630,9 +632,7 @@ Call CONTINUE with dante buffer."
             ((_start-messages
               (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
           (dante-set-state 'running)
-          (message "Started with buf: %s" buffer)
-          ;; (lcr-resume continue buffer)
-          )
+          (lcr-resume continue buffer))
         (lcr-process-initialize buffer)
         (set-process-sentinel process 'dante-sentinel)
         buffer)))
@@ -857,15 +857,15 @@ Search upwards in the directory structure, starting from FILE (or
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
   (lcr-cps-let ((ret (lcr-blocking-call))
-                  (_load_messages (dante-async-load-current-buffer nil nil))
-                  (target (dante-async-call (concat ":loc-at " symbol))))
+                (_load_messages (dante-async-load-current-buffer nil nil))
+                (target (dante-async-call (concat ":loc-at " symbol))))
     (let ((xrefs (dante--make-xrefs target)))
       (funcall ret xrefs))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
   (lcr-cps-let ((ret (lcr-blocking-call))
-                  (_load_messages (dante-async-load-current-buffer nil nil))
-                  (result (dante-async-call (concat ":uses " symbol))))
+                (_load_messages (dante-async-load-current-buffer nil nil))
+                (result (dante-async-call (concat ":uses " symbol))))
     (let ((xrefs (dante--make-xrefs result)))
       (funcall ret xrefs))))
 
@@ -961,8 +961,7 @@ The command block is indicated by the >>> symbol."
                             (-non-nil
                              (--map (dante-fm-message it src-buffer temp-file) messages))))))
       (lcr-cps-let ((_ (dante-soft-session)) ; yield until GHCi is ready to process the request
-                    ((messages (dante-async-load-current-buffer nil msg-fn))))
-        (message "loaded!!! nothing done:%s" nothing-done)
+                    (messages (dante-async-load-current-buffer nil msg-fn)))
         (when nothing-done ; clears previous messages and deals with #52
           (funcall msg-fn messages))))))
 
