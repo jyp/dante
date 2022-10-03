@@ -303,7 +303,6 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
 Interpreting puts all symbols from the current module in
 scope.  Compiling to avoids re-interpreting the dependencies over
 and over."
-  (message "dante-async-load-current-buffer!")
   (let* ((epoch (buffer-modified-tick))
          (unchanged (equal epoch dante-temp-epoch))
          (src-fname (buffer-file-name (current-buffer)))
@@ -651,7 +650,10 @@ Must be called from GHCi process buffer."
     (lcr-cps-let ((input (lcr-process-read buffer)))
       (dante-debug 'inputs "%s" input)
       (funcall cont (s-replace "\r" "" input))
+      ;; we're returning from the continuation, either because it's
+      ;; done or it has yielded. If it is done, try to pop from the queue.
       (dante-schedule-next buffer)))
+  ;; the call to lcr-process-read has yielded, but we should update the status
   (force-mode-line-update t))
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
