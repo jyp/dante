@@ -13,7 +13,7 @@
 ;; Package-Commit: e2acbf6dd37818cbf479c9c3503d8a59192e34af
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.0"))
+;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.1"))
 ;; Version: 0-pre
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -165,7 +165,6 @@ otherwise search for project root using
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
-(defvar-local dante-flymake-token 1000) ;; TODO: obsolete
 (defvar-local dante-command-line nil "Command line used to start GHCi.")
 (defvar-local dante-load-message nil "Load messages.")
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
@@ -307,7 +306,7 @@ and over."
          (unchanged (equal epoch dante-temp-epoch))
          (src-fname (buffer-file-name (current-buffer)))
          (fname (dante-temp-file-name (current-buffer)))
-         (buffer (lcr-call dante-session))
+         (buffer (lcr-call dante-session t))
          (same-target (and (or dante-interpreted (not interpret))
                        (s-equals? (buffer-local-value 'dante-loaded-file buffer) src-fname))))
     (if (and unchanged same-target) ; see #52
@@ -571,25 +570,17 @@ This applies to paths of the form x:\\foo\\bar"
   (interactive)
   (when (dante-buffer-p)
     (dante-destroy)
-    (lcr-cps-let ((_ (dante-session))))))
+    (lcr-cps-let ((_ (dante-session t))))))
 
-(lcr-def dante-session ()
-  "Get the session or create one if none exists."
-  (or (dante-buffer-p)
-      (lcr-call dante-start)))
-
-(defun dante-abort (_cont)
-  "Abort by not calling CONT."
-  (message "Dante: not queueing request; too busy right now"))
-
-(lcr-def dante-soft-session ()
-  "If idle, get the session.
-Create a session if none exists.  Abort if there is a busy session."
+(defun dante-session (wait cont)
+  "Get the session or create one if none exists.
+If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
   (if-let* ((buf (dante-buffer-p)))
       (if (buffer-local-value 'lcr-process-callback buf)
-          (lcr-call dante-abort)
-        buf)
-    (lcr-call dante-start)))
+          (if wait (with-current-buffer buf (push cont dante-queue))
+            (message "Dante: not queueing request (busy right now)"))
+        (funcall cont buf))
+  (dante-start cont)))
 
 (defun dante-schedule-next (buffer)
   "If no sub-session is running, run the next queued sub-session for BUFFER.
@@ -653,7 +644,7 @@ Must be called from GHCi process buffer."
       ;; we're returning from the continuation, either because it's
       ;; done or it has yielded. If it is done, try to pop from the queue.
       (dante-schedule-next buffer)))
-  ;; the call to lcr-process-read has yielded, but we should update the status
+  ;; the call to lcr-process-read has yielded, but we should updat
   (force-mode-line-update t))
 
 (defconst dante-ghci-prompt "\4\\(.*\\)|")
@@ -958,11 +949,10 @@ The command block is indicated by the >>> symbol."
          (nothing-done t))
     (let ((msg-fn (lambda (messages)
                    (setq nothing-done nil)
-                   (message "msg-fn Reporting: %s" messages)
                    (funcall report-fn
                             (-non-nil
                              (--map (dante-fm-message it src-buffer temp-file) messages))))))
-      (lcr-cps-let ((_ (dante-soft-session)) ; yield until GHCi is ready to process the request
+      (lcr-cps-let ((_ (dante-session nil)) ; do this only if GHCi is not busy
                     (messages (dante-async-load-current-buffer nil msg-fn)))
         (when nothing-done ; clears previous messages and deals with #52
           (funcall msg-fn messages))))))
