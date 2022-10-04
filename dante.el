@@ -579,8 +579,12 @@ This applies to paths of the form x:\\foo\\bar"
 If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
   (if-let* ((buf (dante-buffer-p)))
       (if (buffer-local-value 'lcr-process-callback buf)
-          (if wait (with-current-buffer buf (push cont dante-queue))
-            (message "Not queueing request (busy right now)"))
+          (lcr-context-switch
+              (with-current-buffer buf
+                (when dante-queue
+                  (message "Overriding previously queued GHCi request."))
+                (setq dante-queue (cons (lambda (x) (lcr-resume cont x)) nil)))
+            (force-mode-line-update t))
         (funcall cont buf))
   (dante-start cont)))
 
@@ -609,25 +613,24 @@ If the queue is empty, do nothing.  Note that sub-sessions are not interleaved."
 (defun dante-start (continue)
   "Start a GHCi process and return its buffer.
 Call CONTINUE with dante buffer."
-  (lcr-context-switch
-      (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
-             (buffer (dante-buffer-create))
-             (process (with-current-buffer buffer
-                        (message "Dante: Starting GHCi: %s" (combine-and-quote-strings args))
-                        (apply #'start-file-process "dante" buffer args))))
-        (set-process-query-on-exit-flag process nil)
-        (with-current-buffer buffer
-          (erase-buffer)
-          (setq-local dante-command-line (process-command process)))
-        (dante-set-state 'starting)
-        (lcr-cps-let
-            ((_start-messages
-              (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
-          (dante-set-state 'started)
-          (lcr-resume continue buffer))
-        (lcr-process-initialize buffer)
-        (set-process-sentinel process 'dante-sentinel)
-        buffer)))
+  (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
+         (buffer (dante-buffer-create))
+         (process (with-current-buffer buffer
+                    (message "Dante: Starting GHCi: %s" (combine-and-quote-strings args))
+                    (apply #'start-file-process "dante" buffer args))))
+    (set-process-query-on-exit-flag process nil)
+    (with-current-buffer buffer
+      (erase-buffer)
+      (setq-local dante-command-line (process-command process)))
+    (dante-set-state 'starting)
+    (lcr-cps-let
+        ((_start-messages
+          (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
+      (dante-set-state 'started)
+      (funcall continue buffer))
+    (lcr-process-initialize buffer)
+    (set-process-sentinel process 'dante-sentinel)
+    buffer))
 
 (defun dante-debug (category msg &rest objects)
   "Append a debug message MSG to the current buffer.
@@ -947,27 +950,31 @@ The command block is indicated by the >>> symbol."
 (defun dante-flymake (report-fn &rest _args)
   "Run a check and pass the status onto REPORT-FN."
   (let* ((src-buffer (current-buffer))
+         (buf0 (dante-buffer-p))
          (temp-file (dante-local-name (dante-temp-file-name src-buffer)))
-         (nothing-done t))
-    (lcr-cps-let ((buf (dante-session nil)))
-      (let* ((local-token (with-current-buffer buf (setq dante-flymake-token (1+ dante-flymake-token))))
-             (token-guard (lambda () (eq (buffer-local-value 'dante-flymake-token buf) local-token)))
-             ;; flymake raises errors when any report is made using an
-             ;; "old" call to the backend. However, we must deal with
-             ;; all GHCi output, so we must let the loop run to
-             ;; completion. So we simply disable messages if another
-             ;; call to this function is detected.
-             (msg-fn (lambda (messages)
-                       (when (funcall token-guard)
-                         (setq nothing-done nil)
-                         (funcall report-fn
-                                  (-non-nil
-                                   (--map (dante-fm-message it src-buffer temp-file) messages)))))))
-        
-        (when (funcall token-guard)
-          (lcr-cps-let ((messages (dante-async-load-current-buffer nil msg-fn)))
-            (when nothing-done ; clears previous messages and deals with #52
-              (funcall msg-fn messages))))))))
+         (nothing-done t)
+         ;; flymake raises errors when any report is made using an
+         ;; "old" call to the backend. However, we must deal with all
+         ;; GHCi output, so we must let the loop run to completion. So
+         ;; we simply disable messages if another call to this
+         ;; function is detected.  This token must be set before any
+         ;; context switch occurs, otherwise we cannot detect if we
+         ;; got another call from flymake in between.
+         (local-token (if buf0 (with-current-buffer buf0 (setq dante-flymake-token (1+ dante-flymake-token)))
+                        dante-flymake-token)))
+    (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
+      (lcr-cps-let ((buf (dante-session t))) ; yield until GHCi is ready to process the request
+        (let* ((token-guard (lambda () (eq (buffer-local-value 'dante-flymake-token buf) local-token)))
+               (msg-fn (lambda (messages)
+                         (when (funcall token-guard)
+                           (setq nothing-done nil)
+                           (funcall report-fn
+                                    (-non-nil
+                                     (--map (dante-fm-message it src-buffer temp-file) messages)))))))
+          (when (funcall token-guard) ; don't try to load if we're too late.
+            (lcr-cps-let ((messages (dante-async-load-current-buffer nil msg-fn)))
+              (when nothing-done ; clears previous messages and deals with #52
+                (funcall msg-fn messages)))))))))
 
 (defun dante-pos-at-line-col (buf l c)
   "Translate line L and column C into a position within BUF."
