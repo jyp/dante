@@ -322,6 +322,7 @@ and over."
       (with-current-buffer buffer
         (dante-async-write (if same-target ":r"
                              (concat ":l " (if interpret "*" "") (dante-local-name fname))))
+        (setq dante-state 'loading)
         (cl-destructuring-bind (_status err-messages _loaded-modules)
             (lcr-call dante-load-loop "" nil err-fn)
           (setq dante-loaded-file src-fname)
@@ -661,7 +662,6 @@ Must be called from GHCi process buffer."
 (lcr-def dante-load-loop (acc err-msgs err-fn)
   "Parse the output of load command.
 ACC umulate input and ERR-MSGS."
-  (setq dante-state 'loading)
   (let ((success (dante-regexp-disjoin
                   "^Ok, modules loaded:[ ]*\\([^\n ]*\\)\\( (.*)\\)?\."
                   "^Ok, .*modules loaded." ;; .* stands for a number in english (two, three, ...) (GHC 8.2)
@@ -682,6 +682,7 @@ ACC umulate input and ERR-MSGS."
                ;; With the +c setting, GHC (8.2) prints: 1. error
                ;; messages+warnings, if compiling only 2. if successful,
                ;; repeat the warnings
+               (setq dante-state 'process-warnings)
                (cl-destructuring-bind (_status warning-msgs loaded-mods) (lcr-call dante-load-loop rest nil nil)
                  (setq dante-state (list 'loaded loaded-mods))
                  (setq result (list 'ok (or (nreverse err-msgs) warning-msgs) loaded-mods))))
