@@ -165,6 +165,7 @@ otherwise search for project root using
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
+(defvar-local dante-flymake-token 1000)
 (defvar-local dante-command-line nil "Command line used to start GHCi.")
 (defvar-local dante-load-message nil "Load messages.")
 (defvar-local dante-loaded-file "<DANTE:NO-FILE-LOADED>")
@@ -578,7 +579,7 @@ If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
   (if-let* ((buf (dante-buffer-p)))
       (if (buffer-local-value 'lcr-process-callback buf)
           (if wait (with-current-buffer buf (push cont dante-queue))
-            (message "Dante: not queueing request (busy right now)"))
+            (message "Not queueing request (busy right now)"))
         (funcall cont buf))
   (dante-start cont)))
 
@@ -947,15 +948,25 @@ The command block is indicated by the >>> symbol."
   (let* ((src-buffer (current-buffer))
          (temp-file (dante-local-name (dante-temp-file-name src-buffer)))
          (nothing-done t))
-    (let ((msg-fn (lambda (messages)
-                   (setq nothing-done nil)
-                   (funcall report-fn
-                            (-non-nil
-                             (--map (dante-fm-message it src-buffer temp-file) messages))))))
-      (lcr-cps-let ((_ (dante-session nil)) ; do this only if GHCi is not busy
-                    (messages (dante-async-load-current-buffer nil msg-fn)))
-        (when nothing-done ; clears previous messages and deals with #52
-          (funcall msg-fn messages))))))
+    (lcr-cps-let ((buf (dante-session nil)))
+      (let* ((local-token (with-current-buffer buf (setq dante-flymake-token (1+ dante-flymake-token))))
+             (token-guard (lambda () (eq (buffer-local-value 'dante-flymake-token buf) local-token)))
+             ;; flymake raises errors when any report is made using an
+             ;; "old" call to the backend. However, we must deal with
+             ;; all GHCi output, so we must let the loop run to
+             ;; completion. So we simply disable messages if another
+             ;; call to this function is detected.
+             (msg-fn (lambda (messages)
+                       (when (funcall token-guard)
+                         (setq nothing-done nil)
+                         (funcall report-fn
+                                  (-non-nil
+                                   (--map (dante-fm-message it src-buffer temp-file) messages)))))))
+        
+        (when (funcall token-guard)
+          (lcr-cps-let ((messages (dante-async-load-current-buffer nil msg-fn)))
+            (when nothing-done ; clears previous messages and deals with #52
+              (funcall msg-fn messages))))))))
 
 (defun dante-pos-at-line-col (buf l c)
   "Translate line L and column C into a position within BUF."
