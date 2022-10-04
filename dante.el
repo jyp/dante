@@ -308,7 +308,7 @@ and over."
          (unchanged (equal epoch dante-temp-epoch))
          (src-fname (buffer-file-name (current-buffer)))
          (fname (dante-temp-file-name (current-buffer)))
-         (buffer (lcr-call dante-session t))
+         (buffer (lcr-call dante-session))
          (same-target (and (or dante-interpreted (not interpret))
                        (s-equals? (buffer-local-value 'dante-loaded-file buffer) src-fname))))
     (if (and unchanged same-target) ; see #52
@@ -573,9 +573,9 @@ This applies to paths of the form x:\\foo\\bar"
   (interactive)
   (when (dante-buffer-p)
     (dante-destroy)
-    (lcr-cps-let ((_ (dante-session t))))))
+    (lcr-cps-let ((_ (dante-session))))))
 
-(defun dante-session (wait cont)
+(defun dante-session (cont)
   "Get the session or create one if none exists.
 If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
   (if-let* ((buf (dante-buffer-p)))
@@ -964,7 +964,7 @@ The command block is indicated by the >>> symbol."
          (local-token (if buf0 (with-current-buffer buf0 (setq dante-flymake-token (1+ dante-flymake-token)))
                         dante-flymake-token)))
     (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
-      (lcr-cps-let ((buf (dante-session t))) ; yield until GHCi is ready to process the request
+      (lcr-cps-let ((buf (dante-session))) ; yield until GHCi is ready to process the request
         (let* ((token-guard (lambda () (eq (buffer-local-value 'dante-flymake-token buf) local-token)))
                (msg-fn (lambda (messages)
                          (when (funcall token-guard)
