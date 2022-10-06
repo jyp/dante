@@ -572,8 +572,8 @@ This applies to paths of the form x:\\foo\\bar"
   "Restart GHCi with the same configuration (root, command line) as before."
   (interactive)
   (when (dante-buffer-p)
-    (dante-destroy)
-    (lcr-cps-let ((_ (dante-session))))))
+    (dante-destroy))
+  (lcr-cps-let ((_ (dante-session)))))
 
 (defun dante-session (cont)
   "Get the session or create one if none exists.
