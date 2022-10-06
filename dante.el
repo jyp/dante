@@ -49,8 +49,7 @@
 (require 's)
 (require 'xref)
 (require 'lcr)
-(eval-when-compile
-  (require 'company))
+(eval-when-compile (require 'company))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Configuration
