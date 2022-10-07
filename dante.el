@@ -13,7 +13,7 @@
 ;; Package-Commit: e2acbf6dd37818cbf479c9c3503d8a59192e34af
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.2"))
+;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.3"))
 ;; Version: 0-pre
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -852,18 +852,14 @@ Search upwards in the directory structure, starting from FILE (or
                                         (s-lines string))))))
 
 (cl-defmethod xref-backend-definitions ((_backend (eql dante)) symbol)
-  (lcr-cps-let ((ret (lcr-blocking-call))
-                (_load_messages (dante-async-load-current-buffer nil nil))
-                (target (dante-async-call (concat ":loc-at " symbol))))
-    (let ((xrefs (dante--make-xrefs target)))
-      (funcall ret xrefs))))
+  (lcr-spawn-and-wait
+   (lcr-call dante-async-load-current-buffer nil nil)
+   (dante--make-xrefs (lcr-call dante-async-call (concat ":loc-at " symbol)))))
 
 (cl-defmethod xref-backend-references ((_backend (eql dante)) symbol)
-  (lcr-cps-let ((ret (lcr-blocking-call))
-                (_load_messages (dante-async-load-current-buffer nil nil))
-                (result (dante-async-call (concat ":uses " symbol))))
-    (let ((xrefs (dante--make-xrefs result)))
-      (funcall ret xrefs))))
+  (lcr-spawn-and-wait
+   (lcr-call dante-async-load-current-buffer nil nil)
+   (dante--make-xrefs (lcr-call dante-async-call (concat ":uses " symbol)))))
 
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
