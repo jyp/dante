@@ -591,7 +591,7 @@ This applies to paths of the form x:\\foo\\bar"
   (interactive)
   (when (dante-buffer-p)
     (dante-destroy))
-  (lcr-cps-let ((_ (dante-session)))))
+  (lcr-spawn (lcr-call dante-session)))
 
 (defun dante-session (cont)
   "Get the session or create one if none exists.
@@ -893,7 +893,7 @@ Use nil to disable." :type 'integer :group 'dante)
       (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap)) ;; not in a comment or string
         (setq-local dante-idle-point (point))
         (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t nil))
-                        (ty (dante-async-call (concat ":type-at " tap))))
+                      (ty (dante-async-call (concat ":type-at " tap))))
           (when (and (let ((cur-msg (current-message)))
                        (or (not cur-msg)
                            (string-match-p (concat "^Wrote " (buffer-file-name)) cur-msg)
