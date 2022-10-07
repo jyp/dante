@@ -618,9 +618,8 @@ If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
                             ("-fdiagnostics-color=never" "No color codes in error messages (color codes will trigger bugs in Dante)")
                             ("-fno-diagnostics-show-caret" "Cleaner error messages for GHC >=8.2 (ignored by earlier versions)")))))
 
-(defun dante-start (continue)
-  "Start a GHCi process and return its buffer.
-Call CONTINUE with dante buffer."
+(lcr-def dante-start ()
+  "Start a GHCi process and return its buffer."
   (let* ((args (-non-nil (-map #'eval (dante-repl-command-line))))
          (buffer (dante-buffer-create))
          (process (with-current-buffer buffer
@@ -631,13 +630,10 @@ Call CONTINUE with dante buffer."
       (erase-buffer)
       (setq-local dante-command-line (process-command process)))
     (dante-set-state 'starting)
-    (lcr-cps-let
-        ((_start-messages
-          (dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))))
-      (dante-set-state 'started)
-      (funcall continue buffer))
     (lcr-process-initialize buffer)
     (set-process-sentinel process 'dante-sentinel)
+    (lcr-call dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))
+    (dante-set-state 'started)
     buffer))
 
 (defun dante-debug (category msg &rest objects)
