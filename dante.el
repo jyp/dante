@@ -219,6 +219,8 @@ to destroy the buffer and create a fresh one without this variable enabled.
            (_ (format "%s" dante-state)))
         (if dante-queue (format "+%s" (length dante-queue)) ""))))))
 
+(defcustom dante-modeline-prefix " Danté:" "Modeline prefix" :group 'dante :type 'string)
+
 ;;;###autoload
 (define-minor-mode dante-mode
   "Minor mode for Dante.
@@ -234,7 +236,7 @@ non-positive integer, and enables dante otherwise (including
 if the argument is omitted or nil or a positive integer).
 
 \\{dante-mode-map}"
-  :lighter (:eval (concat " Danté:" (dante-status)))
+  :lighter (:eval (concat dante-modeline-prefix (dante-status)))
   :keymap dante-mode-map
   :group 'dante
   (if dante-mode
