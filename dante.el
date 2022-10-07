@@ -911,28 +911,6 @@ Use nil to disable." :type 'integer :group 'dante)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
 
-(defun dante-eval-loop (block-end)
-  "Evaluation loop iteration.
-Calls DONE when done.
-BLOCK-END is a marker for the end of the evaluation block."
-  (while (and (looking-at "[ \t]*--")
-              (not (looking-at "[ \t]*--[ \t]+>>>")))
-    (forward-line))
-  (when (search-forward-regexp "[ \t]*--[ \t]+>>>" (line-end-position) t 1)
-    ;; found the next command; execute it and replace the result.
-    (lcr-cps-let ((res (dante-async-call (buffer-substring-no-properties (point) (line-end-position)))))
-      (beginning-of-line)
-      (forward-line)
-      (save-excursion
-        (delete-region (point)
-                       ;; look for: empty comment line, next command or end of block.
-                       (or (and (search-forward-regexp "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t 1)
-                                (match-beginning 0))
-                           block-end)))
-      (insert (apply 'concat (--map (concat "-- " it "\n") (--remove (s-blank? it) (s-lines res)))))
-      (beginning-of-line)
-      (dante-eval-loop block-end))))
-
 (defun dante-eval-block ()
   "Evaluate the GHCi command(s) found at point and insert the results.
 The command block is indicated by the >>> symbol."
@@ -942,8 +920,25 @@ The command block is indicated by the >>> symbol."
   (let ((block-end (save-excursion (while (looking-at "[ \t]*--") (forward-line)) (point-marker))))
     (while (looking-at "[ \t]*--") (forward-line -1))
     (forward-line)
-    (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t nil)))
-      (dante-eval-loop block-end))))
+    (lcr-spawn
+      (lcr-call dante-async-load-current-buffer t nil)
+      (while (search-forward-regexp "[ \t]*--[ \t]+>>>" (line-end-position) t 1)
+        ;; found a command; execute it and replace the result.
+        (let ((res (lcr-call dante-async-call (buffer-substring-no-properties (point) (line-end-position)))))
+          (beginning-of-line)
+          (forward-line)
+          (save-excursion
+            (delete-region (point)
+                           ;; look for: empty comment line, next command or end of block.
+                           (or (and (search-forward-regexp "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t 1)
+                                    (match-beginning 0))
+                               block-end)))
+          (insert (apply 'concat (--map (concat "-- " it "\n") (--remove (s-blank? it) (s-lines res)))))
+          (beginning-of-line)
+          ;; skip any non-executable comment
+          (while (and (looking-at "[ \t]*--")
+                      (not (looking-at "[ \t]*--[ \t]+>>>")))
+            (forward-line)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flymake
