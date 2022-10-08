@@ -881,7 +881,8 @@ Intended for `eldoc-documentation-functions'"
         (lcr-spawn
           (lcr-call dante-async-load-current-buffer t nil)
           (let* ((ty (lcr-call dante-async-call (concat ":type-at " tap))))
-            (funcall callback (s-collapse-whitespace (dante-fontify-expression ty)))))
+            (unless (s-match "^<interactive>" ty)
+              (funcall callback (s-collapse-whitespace (dante-fontify-expression ty))))))
         ;; TODO: improve by reporting :thing separately, perhaps docstring, etc.
         t))))
 
