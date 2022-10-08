@@ -359,8 +359,9 @@ and over."
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
   (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
-    (lcr-cps-let ((messages (dante-async-load-current-buffer nil nil)))
-      (let* ((temp-file (dante-local-name (dante-temp-file-name (current-buffer)))))
+    (lcr-spawn
+      (let* ((messages (lcr-call dante-async-load-current-buffer nil nil))
+             (temp-file (dante-local-name (dante-temp-file-name (current-buffer)))))
         (funcall cont
                  'finished
                  (-non-nil (--map (dante-fly-message it checker (current-buffer) temp-file) messages)))))))
@@ -870,7 +871,7 @@ Search upwards in the directory structure, starting from FILE (or
 ;; eldoc support
 
 (defun dante-eldoc-type (callback &rest _ignored)
-  "Document type of function at point.
+  "Document type of function at point via CALLBACK.
 Intended for `eldoc-documentation-functions'"
   (when (and dante-mode ;; don't start GHCi if dante is not on.
              (dante-buffer-p) ;; don't start GHCi just for this
@@ -920,7 +921,6 @@ The command block is indicated by the >>> symbol."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flymake
-
 
 (defun dante-flymake (report-fn &rest _args)
   "Run a check and pass the status onto REPORT-FN."
