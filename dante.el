@@ -13,7 +13,7 @@
 ;; Package-Commit: e2acbf6dd37818cbf479c9c3503d8a59192e34af
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.3"))
+;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.4"))
 ;; Version: 0-pre
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -219,7 +219,7 @@ to destroy the buffer and create a fresh one without this variable enabled.
            (_ (format "%s" dante-state)))
         (if dante-queue (format "+%s" (length dante-queue)) ""))))))
 
-(defcustom dante-modeline-prefix " Danté:" "Modeline prefix" :group 'dante :type 'string)
+(defcustom dante-modeline-prefix " Danté:" "Modeline prefix." :group 'dante :type 'string)
 
 ;;;###autoload
 (define-minor-mode dante-mode
@@ -272,42 +272,43 @@ If `haskell-mode' is not loaded, just return EXPRESSION."
 (defun dante-doc (ident)
   "Get the haddock about IDENT at point."
   (interactive (list (dante-ident-at-point)))
-  (lcr-cps-let ((info (dante-async-call (format ":doc %s" ident))))
-    (with-help-window (help-buffer)
-      (with-current-buffer (help-buffer)
-        (insert (dante-fontify-expression info))))))
+  (lcr-spawn
+    (let ((info (lcr-call dante-async-call (format ":doc %s" ident))))
+      (with-help-window (help-buffer)
+        (with-current-buffer (help-buffer)
+          (insert (dante-fontify-expression info)))))))
 
 (defun dante-type-at (insert)
   "Get the type of the thing or selection at point.
 When the universal argument INSERT is non-nil, insert the type in the buffer."
   (interactive "P")
   (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
-    (lcr-cps-let ((_load_messages (dante-async-load-current-buffer nil nil))
-                  (ty (dante-async-call (concat ":type-at " tap))))
-      (if insert (save-excursion (goto-char (line-beginning-position))
-                                 (insert (dante-fontify-expression ty) "\n"))
-                 (message "%s" (dante-fontify-expression ty))))))
+    (lcr-spawn
+      (lcr-call dante-async-load-current-buffer nil nil)
+      (let ((ty (lcr-call dante-async-call (concat ":type-at " tap))))
+        (if insert (save-excursion (goto-char (line-beginning-position))
+                                   (insert (dante-fontify-expression ty) "\n"))
+          (message "%s" (dante-fontify-expression ty)))))))
 
 (defun dante-info (ident)
   "Get the info about the IDENT at point."
   (interactive (list (dante-ident-at-point)))
-  (let ((package (dante-package-name))
-        (help-xref-following nil)
-        (origin (buffer-name)))
-    (lcr-cps-let ((_load-message (dante-async-load-current-buffer t nil))
-                  (info (dante-async-call (format ":i %s" ident))))
+  (lcr-spawn
+    (lcr-call dante-async-load-current-buffer t nil)
+    (let ((package (dante-package-name))
+          (help-xref-following nil)
+          (origin (buffer-name))
+          (info (lcr-call dante-async-call (format ":i %s" ident))))
       (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                        (called-interactively-p 'interactive))
-      (save-excursion
-        (let ((help-xref-following nil))
-          (with-help-window (help-buffer)
-            (with-current-buffer (help-buffer)
-              (insert
-               (dante-fontify-expression ident)
-               " in `" origin "'" " (" package ")"
-               "\n\n"
-               (dante-fontify-expression info))
-              (goto-char (point-min)))))))))
+      (with-help-window (help-buffer)
+        (with-current-buffer (help-buffer)
+          (insert
+           (dante-fontify-expression ident)
+           " in `" origin "'" " (" package ")"
+           "\n\n"
+           (dante-fontify-expression info))
+          (goto-char (point-min)))))))
 
 (defvar-local dante-temp-epoch -1
   "The value of `buffer-modified-tick' when the contents were last loaded.")
@@ -872,30 +873,30 @@ Use nil to disable." :type 'integer :group 'dante)
 (defvar dante-timer nil)
 (defvar dante-last-valid-idle-type-message nil)
 
-(defvar-local dante-idle-point nil "Point when idler kicked in.")
-
 (defun dante-idle-function ()
   "Eldoc-like support function."
   (when (and dante-mode ;; don't start GHCi if dante is not on.
-             (dante-buffer-p) ;; buffer exists
+             (dante-buffer-p) ;; don't start GHCi just for this
              (with-current-buffer (dante-buffer-p)
                (not (eq dante-state 'dead))) ;; GHCi alive?
              (not lcr-process-callback)) ;; Is GHCi idle?
-    (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
+    (let ((idle-point (point))
+          (tap (dante--ghc-subexp (dante-thing-at-point))))
       (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap)) ;; not in a comment or string
-        (setq-local dante-idle-point (point))
-        (lcr-cps-let ((_load_messages (dante-async-load-current-buffer t nil))
-                      (ty (dante-async-call (concat ":type-at " tap))))
-          (when (and (let ((cur-msg (current-message)))
-                       (or (not cur-msg)
-                           (string-match-p (concat "^Wrote " (buffer-file-name)) cur-msg)
-                           (and dante-last-valid-idle-type-message
-                                (string-equal dante-last-valid-idle-type-message cur-msg))))
+        (lcr-spawn
+          (lcr-call dante-async-load-current-buffer t nil)
+          (let* ((ty (lcr-call dante-async-call (concat ":type-at " tap)))
+                 (cur-msg (current-message)))
+          (when (and (or (not cur-msg)
+                         (string-match-p (concat "^Wrote " (buffer-file-name)) cur-msg)
+                         (and dante-last-valid-idle-type-message
+                              (string-equal dante-last-valid-idle-type-message cur-msg)))
                      ;; echo area is free, or the buffer was just saved from having triggered a check, or the queue had many requests for idle display and is displaying the last fulfilled idle type request
                      (not (s-match "^<interactive>" ty)) ;; no error
-                     (eq (point) dante-idle-point)) ;; cursor did not move
+                     (eq (point) idle-point)) ;; cursor did not move
               (setq dante-last-valid-idle-type-message (s-collapse-whitespace (dante-fontify-expression ty)))
-              (message "%s" dante-last-valid-idle-type-message)))))))
+              (message "%s" dante-last-valid-idle-type-message))))))))
+
 (when dante-timer (cancel-timer dante-timer))
 (when dante-tap-type-time
   (setq dante-timer (run-with-idle-timer dante-tap-type-time t #'dante-idle-function)))
