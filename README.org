@@ -137,6 +137,20 @@ variables. Note in particular that customization can be done on a
 per-file, per-package or per-project basis by using [[https://www.gnu.org/software/emacs/manual/html_node/emacs/File-Variables.html#File-Variables][file-]] and
 [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory-local]] variables (as recommended above).
 
+*** Eldoc support
+
+Dante has buitin eldoc support (showing info about the symbol at point
+in the modeline when idle.) Unfortunately, at the time of writing (Oct
+2022), the standard Haskell mode uses the old eldoc API, overriding
+Dante's eldoc support. I recommend just disabling the standard Haskell
+mode eldoc support, which IMO isn't very helpful anyway, like so:
+
+#+begin_src elisp
+  (add-hook 'haskell-mode-hook
+            (defun my-fix-hs-eldoc ()
+              (setq eldoc-documentation-strategy #'eldoc-documentation-default)))
+#+end_src
+
 
 ** Comparison with Intero
 
@@ -149,12 +163,11 @@ posterity, here is how Dante compares with Intero:
   Intero. Thus, it will work if (and only if) GHCi works for your
   project. (Including via "Stack".)
 - Dante supports  ~xref-find-definitions~ and ~xref-find-references~.
-- With Dante, Flychecking is optional (yet recommended), whereas
+- Dante has native eldoc support (Emacs 28)
+- With Dante, on-the-fly checking is optional (yet recommended), whereas
   Intero demands that you flycheck your code.
 - Dante has a different approach to Haskell evaluation
-- Dante offers no support for eldoc (but can show type signatures in
-  the minibuffer by modifying the variable: dante-tap-type-time), nor
-  Hoogle.
+- Dante offers no support for Hoogle.
 ** Troubleshooting
 
 If ~dante-type-at~ gives ~Couldn't guess that module name. Does it

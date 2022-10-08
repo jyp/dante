@@ -13,7 +13,7 @@
 ;; Package-Commit: e2acbf6dd37818cbf479c9c3503d8a59192e34af
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((dash "2.12.0") (emacs "25.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.4"))
+;; Package-Requires: ((dash "2.12.0") (emacs "28.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.4"))
 ;; Version: 0-pre
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -240,8 +240,10 @@ if the argument is omitted or nil or a positive integer).
   :keymap dante-mode-map
   :group 'dante
   (if dante-mode
-      (add-hook 'flymake-diagnostic-functions 'dante-flymake nil t)
-    (remove-hook 'flymake-diagnostic-functions 'dante-flymake t)))
+      (progn (add-hook 'flymake-diagnostic-functions 'dante-flymake nil t)
+             (add-hook 'eldoc-documentation-functions 'dante-eldoc-type nil t))
+    (remove-hook 'flymake-diagnostic-functions 'dante-flymake t)
+    (remove-hook 'eldoc-documentation-functions 'dante-eldoc-type t)))
 
 (define-key dante-mode-map (kbd "C-c .") 'dante-type-at)
 (define-key dante-mode-map (kbd "C-c ,") 'dante-info)
@@ -865,41 +867,23 @@ Search upwards in the directory structure, starting from FILE (or
 (add-hook 'xref-backend-functions 'dante--xref-backend)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Idle-hook
+;; eldoc support
 
-(defcustom dante-tap-type-time nil
-"Delay after to display type of the thing at point, in seconds.
-Use nil to disable." :type 'integer :group 'dante)
-(defvar dante-timer nil)
-(defvar dante-last-valid-idle-type-message nil)
-
-(defun dante-idle-function ()
-  "Eldoc-like support function."
+(defun dante-eldoc-type (callback &rest _ignored)
+  "Document type of function at point.
+Intended for `eldoc-documentation-functions'"
   (when (and dante-mode ;; don't start GHCi if dante is not on.
              (dante-buffer-p) ;; don't start GHCi just for this
-             (with-current-buffer (dante-buffer-p)
-               (not (eq dante-state 'dead))) ;; GHCi alive?
-             (not lcr-process-callback)) ;; Is GHCi idle?
-    (let ((idle-point (point))
-          (tap (dante--ghc-subexp (dante-thing-at-point))))
+             (not (eq (dante-get-var dante-state) 'dead)) ;; GHCi alive?
+             (not (dante-get-var lcr-process-callback))) ;; Is GHCi idle?
+    (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
       (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap)) ;; not in a comment or string
         (lcr-spawn
           (lcr-call dante-async-load-current-buffer t nil)
-          (let* ((ty (lcr-call dante-async-call (concat ":type-at " tap)))
-                 (cur-msg (current-message)))
-          (when (and (or (not cur-msg)
-                         (string-match-p (concat "^Wrote " (buffer-file-name)) cur-msg)
-                         (and dante-last-valid-idle-type-message
-                              (string-equal dante-last-valid-idle-type-message cur-msg)))
-                     ;; echo area is free, or the buffer was just saved from having triggered a check, or the queue had many requests for idle display and is displaying the last fulfilled idle type request
-                     (not (s-match "^<interactive>" ty)) ;; no error
-                     (eq (point) idle-point)) ;; cursor did not move
-              (setq dante-last-valid-idle-type-message (s-collapse-whitespace (dante-fontify-expression ty)))
-              (message "%s" dante-last-valid-idle-type-message))))))))
-
-(when dante-timer (cancel-timer dante-timer))
-(when dante-tap-type-time
-  (setq dante-timer (run-with-idle-timer dante-tap-type-time t #'dante-idle-function)))
+          (let* ((ty (lcr-call dante-async-call (concat ":type-at " tap))))
+            (funcall callback (s-collapse-whitespace (dante-fontify-expression ty)))))
+        ;; TODO: improve by reporting :thing separately, perhaps docstring, etc.
+        t))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
