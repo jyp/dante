@@ -278,7 +278,7 @@ If `haskell-mode' is not loaded, just return EXPRESSION."
     (let ((info (lcr-call dante-async-call (format ":doc %s" ident))))
       (with-help-window (help-buffer)
         (with-current-buffer (help-buffer)
-          (insert (dante-fontify-expression info)))))))
+          (insert info))))))
 
 (defun dante-type-at (insert)
   "Get the type of the thing or selection at point.
