@@ -277,8 +277,7 @@ If `haskell-mode' is not loaded, just return EXPRESSION."
   (lcr-spawn
     (let ((info (lcr-call dante-async-call (format ":doc %s" ident))))
       (with-help-window (help-buffer)
-        (with-current-buffer (help-buffer)
-          (insert info))))))
+        (princ info)))))
 
 (defun dante-type-at (insert)
   "Get the type of the thing or selection at point.
@@ -724,8 +723,7 @@ This is a standard process sentinel function."
   (interactive)
   (let ((info (dante-debug-info (dante-buffer-p))))
     (with-help-window (help-buffer)
-      (with-current-buffer (help-buffer)
-        (insert info)))))
+      (princ info))))
 
 (defun dante-debug-info (buffer)
   "Show debug info for dante buffer BUFFER."
@@ -733,7 +731,7 @@ This is a standard process sentinel function."
       (with-current-buffer buffer
         (s-join "\n" (--map (format "%s %S" it (eval it))
                             '(default-directory dante-command-line dante-state dante-queue dante-loaded-file dante-load-message lcr-process-callback))))
-    (format "No GHCi interaction buffer")))
+    "No GHCi interaction buffer"))
 
 (defun dante-show-process-problem (process change)
   "Report to the user that PROCESS reported CHANGE, causing it to end."
