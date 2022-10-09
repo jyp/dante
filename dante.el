@@ -300,17 +300,14 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
     (let ((package (dante-package-name))
           (help-xref-following nil)
           (origin (buffer-name))
-          (info (lcr-call dante-async-call (format ":i %s" ident))))
+          (info (lcr-call dante-async-call (format ":info %s" ident))))
       (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                        (called-interactively-p 'interactive))
       (with-help-window (help-buffer)
-        (with-current-buffer (help-buffer)
-          (insert
-           (dante-fontify-expression ident)
-           " in `" origin "'" " (" package ")"
-           "\n\n"
-           (dante-fontify-expression info))
-          (goto-char (point-min)))))))
+        (princ (concat (dante-fontify-expression ident)
+                       " in `" origin "'" " (" package ")"
+                       "\n\n"
+                       (dante-fontify-expression info)))))))
 
 (defvar-local dante-temp-epoch -1
   "The value of `buffer-modified-tick' when the contents were last loaded.")
