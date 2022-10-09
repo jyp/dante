@@ -873,19 +873,19 @@ Search upwards in the directory structure, starting from FILE (or
 (defun dante-eldoc-type (callback &rest _ignored)
   "Document type of function at point via CALLBACK.
 Intended for `eldoc-documentation-functions'"
-  (when (and dante-mode ;; don't start GHCi if dante is not on.
-             (dante-buffer-p) ;; don't start GHCi just for this
-             (not (eq (dante-get-var dante-state) 'dead)) ;; GHCi alive?
-             (not (dante-get-var lcr-process-callback))) ;; Is GHCi idle?
-    (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
-      (unless (or (nth 4 (syntax-ppss)) (nth 3 (syntax-ppss)) (s-blank? tap)) ;; not in a comment or string
-        (lcr-spawn
-          (lcr-call dante-async-load-current-buffer t nil)
-          (let* ((ty (lcr-call dante-async-call (concat ":type-at " tap))))
-            (unless (s-match "^<interactive>" ty)
-              (funcall callback (s-collapse-whitespace (dante-fontify-expression ty))))))
-        ;; TODO: improve by reporting :thing separately, perhaps docstring, etc.
-        t))))
+  (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
+    (unless (or (eq (dante-get-var dante-state) 'dead) ;; GHCi dead?
+                (dante-get-var lcr-process-callback) ;; GHCi busy?
+                (nth 4 (syntax-ppss)) ;; in a comment
+                (nth 3 (syntax-ppss)) ;; in a string
+                (s-blank? tap))
+      (lcr-spawn
+        (lcr-call dante-async-load-current-buffer t nil)
+        (let* ((ty (lcr-call dante-async-call (concat ":type-at " tap))))
+          (unless (s-match "^<interactive>" ty)
+            (funcall callback (s-collapse-whitespace (dante-fontify-expression ty))))))
+      ;; TODO: improve by reporting :thing separately
+      t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Reploid
