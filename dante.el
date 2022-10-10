@@ -591,7 +591,7 @@ This applies to paths of the form x:\\foo\\bar"
   (interactive)
   (when (dante-buffer-p)
     (dante-destroy))
-  (lcr-spawn (lcr-call dante-session)))
+  (lcr-spawn (lcr-call dante-start)))
 
 (defun dante-session (cont)
   "Get the session or create one if none exists.
@@ -876,7 +876,7 @@ Intended for `eldoc-documentation-functions'"
                 (s-blank? tap))
       (lcr-spawn
         (lcr-call dante-async-load-current-buffer t nil)
-        (let* ((ty (lcr-call dante-async-call (concat ":type-at " tap))))
+        (let ((ty (lcr-call dante-async-call (concat ":type-at " tap))))
           (unless (s-match "^<interactive>" ty)
             (funcall callback (s-collapse-whitespace (dante-fontify-expression ty))))))
       ;; TODO: improve by reporting :thing separately
