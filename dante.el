@@ -334,7 +334,7 @@ and over."
       (setq dante-interpreted interpret)
       (puthash (dante-local-name fname) src-fname dante-original-buffer-map)
       (write-region nil nil fname nil 0)
-      ;; GHCi will interpret the buffer iff. both -fbyte-code and :l * are used.
+      ;; GHCi will interpret the buffer if both -fbyte-code and :l * are used.
       (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
       (with-current-buffer buffer
         (dante-async-write (if same-target ":r"
