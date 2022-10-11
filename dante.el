@@ -164,6 +164,8 @@ otherwise search for project root using
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
 
+(defvar-local dante-ghci-path nil "Path where GHCi runs.
+Variable `dante-project-root' can be different because of cabal behaviour.")
 (defvar-local dante-flymake-token 1000)
 (defvar-local dante-command-line nil "Command line used to start GHCi.")
 (defvar-local dante-load-message nil "Load messages.")
@@ -631,8 +633,10 @@ If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
       (setq-local dante-command-line (process-command process)))
     (dante-set-state 'starting)
     (lcr-process-initialize buffer)
-    (set-process-sentinel process 'dante-sentinel)
+    (set-process-sentinel process 'dante-sentinel) ; only now can we interact with GHCi
     (lcr-call dante-async-call (s-join "\n" (--map (concat ":set " it) (-snoc dante-load-flags "prompt \"\\4%s|\""))))
+    (let ((dir (lcr-call dante-async-call ":!pwd")))
+      (with-current-buffer buffer (setq dante-ghci-path dir)))
     (dante-set-state 'started)
     buffer))
 
@@ -831,7 +835,7 @@ Search upwards in the directory structure, starting from FILE (or
           (col (string-to-number (match-string 3 string))))
       (xref-make-file-location
        (or (gethash file dante-original-buffer-map)
-           (expand-file-name file dante-project-root))
+           (expand-file-name file dante-ghci-path))
        line (1- col)))))
 
 (defun dante--summarize-src-spans (spans file)
