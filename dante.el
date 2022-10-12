@@ -574,16 +574,15 @@ This applies to paths of the form x:\\foo\\bar"
 (defun dante-destroy ()
   "Stop GHCi and kill its associated process buffer."
   (interactive)
-  (when (dante-buffer-p) ; TODO: simplify
+  (when-let ((buf (dante-buffer-p)))
     (dante-set-state 'deleting)
-    (with-current-buffer (dante-buffer-p)
-      (when (get-buffer-process (current-buffer))
-        (kill-process (get-buffer-process (current-buffer)))
-        (delete-process (get-buffer-process (current-buffer))))
-      (kill-buffer (current-buffer)))))
+    (when-let ((process (get-buffer-process buf)))
+      (kill-process process)
+      (delete-process process))
+    (kill-buffer buf)))
 
 (defun dante-restart ()
-  "Restart GHCi with the same configuration (root, command line) as before."
+  "Restart GHCi with the same configuration (root, command line, …) as before."
   (interactive)
   (when (dante-buffer-p)
     (dante-destroy))
@@ -601,7 +600,7 @@ If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
                   (message "Overriding previously queued GHCi request."))
                 (setq dante-queue (cons (lambda (x) (lcr-resume cont x)) nil))))
         (funcall cont buf))
-  (dante-start cont)))
+    (dante-start cont)))
 
 (defcustom dante-load-flags '("+c" "-fdiagnostics-color=never" "-fno-diagnostics-show-caret" "-Wwarn=missing-home-modules" "-ferror-spans" )
   "Flags to set whenever GHCi is started."
