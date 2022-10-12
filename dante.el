@@ -83,11 +83,9 @@ Customize as a file or directory variable."
 (defcustom dante-target nil
   "The target to demand from cabal repl, as a string or nil.
 Customize as a file or directory variable.  Different targets
-will be in different GHCi sessions."
+will be in loaded in different GHCi sessions."
   :group 'dante :safe t
   :type '(choice (const nil) string))
-
-(defvar-local dante-package-name nil "The package name associated with the current buffer.")
 
 (put 'dante-target 'safe-local-variable #'stringp)
 
@@ -102,17 +100,17 @@ will be in different GHCi sessions."
        (directory-files d t ".cabal$")))
 
 (defcustom dante-methods-alist
-  `((new-flake-impure "flake.nix" ("nix" "develop" "--impure" "-c" "cabal" "v2-repl" (or dante-target dante-package-name #1="") "--builddir=dist/dante"))
-    (new-flake "flake.nix" ("nix" "develop" "-c" "cabal" "v2-repl" (or dante-target dante-package-name #1="") "--builddir=dist/dante"))
-    (flake-impure "flake.nix" ("nix" "develop" "--impure" "-c" "cabal" "v1-repl" (or dante-target dante-package-name #1="") "--builddir=dist/dante"))
-    (flake "flake.nix" ("nix" "develop" "-c" "cabal" "v1-repl" (or dante-target dante-package-name #1="") "--builddir=dist/dante"))
+  `((new-flake-impure "flake.nix" ("nix" "develop" "--impure" "-c" "cabal" "v2-repl" dante-target "--builddir=dist/dante"))
+    (new-flake "flake.nix" ("nix" "develop" "-c" "cabal" "v2-repl" dante-target "--builddir=dist/dante"))
+    (flake-impure "flake.nix" ("nix" "develop" "--impure" "-c" "cabal" "v1-repl" dante-target "--builddir=dist/dante"))
+    (flake "flake.nix" ("nix" "develop" "-c" "cabal" "v1-repl" dante-target "--builddir=dist/dante"))
     (styx "styx.yaml" ("styx" "repl" dante-target))
     ; (snack ,(lambda (d) (directory-files d t "package\\.\\(yaml\\|nix\\)")) ("snack" "ghci" dante-target)) ; too easy to trigger, confuses too many people.
-    (new-impure-nix dante-cabal-new-nix ("nix-shell" "--run" (concat "cabal v2-repl " (or dante-target dante-package-name "") " --builddir=dist/dante")))
-    (new-nix dante-cabal-new-nix ("nix-shell" "--pure" "--run" (concat "cabal v2-repl " (or dante-target dante-package-name "") " --builddir=dist/dante")))
-    (nix dante-cabal-nix ("nix-shell" "--pure" "--run" (concat "cabal v1-repl " (or dante-target "") " --builddir=dist/dante")))
-    (impure-nix dante-cabal-nix ("nix-shell" "--run" (concat "cabal v1-repl " (or dante-target "") " --builddir=dist/dante")))
-    (new-build "cabal.project.local" ("cabal" "new-repl" (or dante-target dante-package-name "") "--builddir=dist/dante"))
+    (new-impure-nix dante-cabal-new-nix ("nix-shell" "--run" (concat "cabal v2-repl " dante-target " --builddir=dist/dante")))
+    (new-nix dante-cabal-new-nix ("nix-shell" "--pure" "--run" (concat "cabal v2-repl " dante-target " --builddir=dist/dante")))
+    (nix dante-cabal-nix ("nix-shell" "--pure" "--run" (concat "cabal v1-repl " dante-target " --builddir=dist/dante")))
+    (impure-nix dante-cabal-nix ("nix-shell" "--run" (concat "cabal v1-repl " dante-target " --builddir=dist/dante")))
+    (new-build "cabal.project.local" ("cabal" "new-repl" dante-target "--builddir=dist/dante"))
     (nix-ghci ,(lambda (d) (directory-files d t "shell.nix\\|default.nix")) ("nix-shell" "--pure" "--run" "ghci"))
     (stack "stack.yaml" ("stack" "repl" dante-target))
     (mafia "mafia" ("mafia" "repl" dante-target))
@@ -136,9 +134,8 @@ Consider setting this variable as a directory variable."
 This sets the variable `dante-project-root' and the variable
 `dante-repl-command-line'.  Do it according to `dante-methods'
 and previous values of the above variables."
-  (unless dante-package-name
-    ;; Get the current package name from a nearby .cabal file
-    (setq dante-package-name
+  (unless dante-target ; Get the current package name from a nearby .cabal file
+    (setq dante-target
           (let ((cabal-file (dante-cabal-find-file)))
             (if cabal-file
                 (replace-regexp-in-string
@@ -151,9 +148,8 @@ and previous values of the above variables."
                    (setq-local dante-repl-command-line (or dante-repl-command-line (nth 1 it)))))
                (-non-nil (--map (alist-get it dante-methods-alist)
                                 dante-methods)))
-      (error "No GHCi loading method applies.  Customize
-      `dante-methods' or
-      (`dante-repl-command-line' and `dante-project-root')")))
+      (error "No GHCi loading method applies.  Customize `dante-methods' or
+      (`dante-repl-command-line' and `dante-project-root') and perhaps `dante-target'")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Session-local variables. These are set *IN THE GHCi INTERACTION BUFFER*
@@ -291,15 +287,14 @@ When the universal argument INSERT is non-nil, insert the type in the buffer."
   (interactive (list (dante-ident-at-point)))
   (lcr-spawn
     (lcr-call dante-async-load-current-buffer t nil)
-    (let ((package dante-package-name)
-          (help-xref-following nil)
+    (let ((help-xref-following nil)
           (origin (buffer-name))
           (info (lcr-call dante-async-call (format ":info %s" ident))))
       (help-setup-xref (list #'dante-call-in-buffer (current-buffer) #'dante-info ident)
                        (called-interactively-p 'interactive))
       (with-help-window (help-buffer)
         (princ (concat (dante-fontify-expression ident)
-                       " in `" origin "'" " (" package ")"
+                       " in `" origin "'"
                        "\n\n"
                        (dante-fontify-expression info)))))))
 
@@ -767,7 +762,7 @@ Process state change: " change "
       (current-buffer))))
 
 (defun dante-set-state (state)
-  "Set the `dante-state' to STATE and redisplay the modeline."
+  "Set the `dante-state' to STATE."
   (with-current-buffer (dante-buffer-p) (setq-local dante-state state)))
 
 (defun dante-buffer-name ()
@@ -775,7 +770,7 @@ Process state change: " change "
 First, if needed, initialize the GHCi invokation method.  Then construct the
 appropriate buffer name on this basis."
   (unless dante-project-root (dante-initialize-method))
-  (concat "*dante:" dante-package-name ":" dante-target ":" dante-project-root "*"))
+  (concat "*dante:" dante-target ":" dante-project-root "*"))
 
 (defun dante-buffer-p ()
   "Return the GHCi buffer if it exists, nil otherwise."
