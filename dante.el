@@ -876,7 +876,7 @@ Intended for `eldoc-documentation-functions'"
   (let ((tap (dante--ghc-subexp (dante-thing-at-point))))
     (unless (or (eq (dante-get-var dante-state) 'dead) ;; GHCi dead?
                 (dante-get-var lcr-process-callback) ;; GHCi busy?
-                (nth 4 (syntax-ppss)) ;; in a comment
+                (dante--in-a-comment)
                 (nth 3 (syntax-ppss)) ;; in a string
                 (s-blank? tap))
       (lcr-spawn
