@@ -637,8 +637,7 @@ Do so iff CATEGORY is enabled in variable `dante-debug'."
 (lcr-def dante-async-read ()
   "Read input from GHCi.
 Must be called from GHCi process buffer."
-  (let* ((buffer (current-buffer))
-         (input (lcr-call lcr-process-read buffer)))
+  (let* ((input (lcr-call lcr-process-read (current-buffer))))
     (dante-debug 'inputs "%s" input)
     (s-replace "\r" "" input)))
 
