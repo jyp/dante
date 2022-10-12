@@ -75,19 +75,15 @@ shell."
   "The project root, as a string or nil.
 When nil, dante will guess the value by looking for a cabal file.
 Customize as a file or directory variable."
-  :group 'dante
+  :group 'dante :safe #'stringp
   :type '(choice (const nil) string))
-
-(put 'dante-project-root 'safe-local-variable #'stringp)
 
 (defcustom dante-target nil
   "The target to demand from cabal repl, as a string or nil.
 Customize as a file or directory variable.  Different targets
 will be in loaded in different GHCi sessions."
-  :group 'dante :safe t
+  :group 'dante :safe #'stringp
   :type '(choice (const nil) string))
-
-(put 'dante-target 'safe-local-variable #'stringp)
 
 (defun dante-cabal-new-nix (d)
   "Non-nil iff directory D hosts a nix file and a cabal file."
