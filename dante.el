@@ -874,7 +874,11 @@ The command block is indicated by the >>> symbol."
   (interactive)
   (push-mark)
   (beginning-of-line)
-  (let ((block-end (save-excursion (while (looking-at "[ \t]*--") (forward-line)) (point-marker))))
+  (let ((block-end (save-excursion
+                     (while (looking-at "[ \t]*--") (forward-line))
+                     ;; ensure that there is a newline at the end of buffer
+                     (when (eq (point) (point-max)) (newline))
+                     (point-marker))))
     (while (looking-at "[ \t]*--") (forward-line -1))
     (forward-line)
     (lcr-spawn
