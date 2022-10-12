@@ -11,19 +11,19 @@ comparison).
 
 ** Features
 
-| Feature                                 | Command               | Keybinding |
-|-----------------------------------------+-----------------------+------------|
-| Flycheck type checking                  | flycheck-mode (†)     |            |
-| Company completion                      | company-mode          |            |
-| Type of selection                       | dante-type-at         | C-c .      |
-| Info at point                           | dante-info            | C-c ,      |
-| Apply Ghc suggestion for error at point | attrap-attrap         | C-c /      |
-| Goto definition                         | xref-find-definitions | M-.        |
-| Find uses                               | xref-find-references  | M-?        |
-| REPLoid (∗)                              | dante-eval-block      | C-c "      |
-| Restart                                 | dante-restart         |            |
-| Diagnosis                               | dante-diagnose        |            |
-| Remote operation over ssh, via tramp (†) | N/A                   | N/A        |
+| Feature                                 | Command                        | Keybinding |
+|-----------------------------------------+--------------------------------+------------|
+| On the fly type checking                | flymake-mode, or flycheck-mode |            |
+| Company completion                      | company-mode                   |            |
+| Type of selection                       | dante-type-at                  | C-c .      |
+| Info at point                           | dante-info                     | C-c ,      |
+| Apply Ghc suggestion for error at point | attrap-attrap                  | C-c /      |
+| Goto definition                         | xref-find-definitions          | M-.        |
+| Find uses                               | xref-find-references           | M-?        |
+| REPLoid (∗)                             | dante-eval-block               | C-c "      |
+| Restart                                 | dante-restart                  |            |
+| Diagnosis                               | dante-diagnose                 |            |
+| Remote operation over ssh, via tramp    | (automatic)                    |            |
 
 *** (∗) REPLoid
 
@@ -79,6 +79,21 @@ may need to ajust the tramp path. For example:
 #+BEGIN_SRC elisp
 (add-to-list 'tramp-remote-path 'tramp-own-remote-path)
 #+END_SRC
+*** Eldoc support
+
+Dante has buitin eldoc support (showing info about the symbol at point
+in the modeline when idle.) Unfortunately, at the time of writing (Oct
+2022), the standard Haskell mode uses the old eldoc API, overriding
+Dante's eldoc support. I recommend just disabling the standard Haskell
+mode eldoc support, which IMO isn't very helpful anyway, like so:
+
+#+begin_src elisp
+  (add-hook 'haskell-mode-hook
+            (defun my-fix-hs-eldoc ()
+              (setq eldoc-documentation-strategy #'eldoc-documentation-default)))
+#+end_src
+
+
 ** Installation
 
 Turn on Dante in your ~haskell-mode-hook~. I recommend:
@@ -136,21 +151,6 @@ customize-group dante~ to read the documentation for all customizable
 variables. Note in particular that customization can be done on a
 per-file, per-package or per-project basis by using [[https://www.gnu.org/software/emacs/manual/html_node/emacs/File-Variables.html#File-Variables][file-]] and
 [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory-local]] variables (as recommended above).
-
-*** Eldoc support
-
-Dante has buitin eldoc support (showing info about the symbol at point
-in the modeline when idle.) Unfortunately, at the time of writing (Oct
-2022), the standard Haskell mode uses the old eldoc API, overriding
-Dante's eldoc support. I recommend just disabling the standard Haskell
-mode eldoc support, which IMO isn't very helpful anyway, like so:
-
-#+begin_src elisp
-  (add-hook 'haskell-mode-hook
-            (defun my-fix-hs-eldoc ()
-              (setq eldoc-documentation-strategy #'eldoc-documentation-default)))
-#+end_src
-
 
 ** Comparison with Intero
 

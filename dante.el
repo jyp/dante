@@ -711,15 +711,15 @@ This is a standard process sentinel function."
       (concat "This is the buffer associated with the GHCi session. This buffer
 is normally hidden, but the GHCi process ended.
 
-WHAT TO DO NEXT
-
-Verify that the GHCi REPL can be loaded manually, then try to
-customize (probably file-locally or directory-locally)
-`dante-project-root' and/or `dante-repl-command-line'.  If you
-fixed the problem, just kill this buffer, Dante will make a fresh
-one and attempt to restart GHCi automatically.
-If you leave this buffer around Dante will not attempt to restart
-GHCi.  You can always run `dante-restart' to make it try again.
+WHAT TO DO NEXT: Verify that the GHCi REPL can be loaded
+manually, then try to customize (probably file-locally or
+directory-locally) a combination of the following variables:
+`dante-method', `dante-project-root', `dante-repl-command-line',
+`dante-target'.  If you fixed the problem, just kill this buffer,
+Dante will make a fresh one and attempt to restart GHCi
+automatically.  If you leave this buffer around Dante will not
+attempt to restart GHCi.  You can always run `dante-restart' to
+make it try again.
 
 EXTRA TROUBLESHOOTING INFO
 
