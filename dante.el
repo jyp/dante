@@ -593,7 +593,8 @@ This applies to paths of the form x:\\foo\\bar"
   (interactive)
   (when (dante-buffer-p)
     (dante-destroy))
-  (lcr-spawn (lcr-call dante-start)))
+  (lcr-spawn (lcr-call dante-start))
+  (when flymake-mode (flymake-start t t))) ; re-enable backend
 
 (defun dante-session (cont)
   "Get the session or create one if none exists.
