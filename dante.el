@@ -699,11 +699,11 @@ This is a standard process sentinel function."
                             '(default-directory dante-command-line dante-state dante-queue dante-loaded-file dante-load-message lcr-process-callback))))
     "No GHCi interaction buffer"))
 
-(defun dante-show-process-problem (process change)
-  "Report to the user that PROCESS reported CHANGE, causing it to end."
+(defun dante-show-process-problem (buf change)
+  "Report to the user that GHCi in BUF reported CHANGE, causing it to end."
   (message "Problem with GHCi process!")
-  (display-buffer (process-buffer process) 'display-buffer-pop-up-window)
-  (with-current-buffer (process-buffer process)
+  (display-buffer buf 'display-buffer-pop-up-window)
+  (with-current-buffer buf
     (goto-char (point-max))
     (insert "\n---\n\n")
     (insert
