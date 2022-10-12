@@ -127,9 +127,9 @@ Consider setting this variable as a directory variable."
 
 (defun dante-initialize-method ()
   "Initialize the method used to run GHCi.
-This sets the variable `dante-project-root' and the variable
-`dante-repl-command-line'.  Do it according to `dante-methods'
-and previous values of the above variables."
+Set `dante-project-root', `dante-repl-command-line' and
+`dante-target'.  Do so according to `dante-methods' and previous
+values of the above variables."
   (unless dante-target ; Get the current package name from a nearby .cabal file
     (setq dante-target
           (let ((cabal-file (dante-cabal-find-file)))
