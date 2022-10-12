@@ -464,9 +464,8 @@ See ``company-backends'' for the meaning of COMMAND, ARG and _IGNORED."
 (defun dante-ident-at-point ()
   "Return the identifier under point, or nil if none found.
 May return a qualified name."
-  (let ((reg (dante-ident-pos-at-point)))
-    (when reg
-      (apply #'buffer-substring-no-properties reg))))
+  (when-let ((reg (dante-ident-pos-at-point)))
+    (apply #'buffer-substring-no-properties reg)))
 
 (defun dante-ident-pos-at-point (&optional offset)
   "Return the span of the (qualified) identifier at point+OFFSET.
