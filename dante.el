@@ -400,31 +400,12 @@ CHECKER and BUFFER are added if the error is in TEMP-FILE."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Company integration (auto-completion)
 
-(defun check-balanced-parens (opened str)
-  "Check that all parenthesis are balanced in STR.
-Assume an number parenthesis OPENED in a prefix."
-  (cond
-   ((string-empty-p str) (= 0 opened))
-   ((< opened 0) nil)
-   (t (let ((head (substring str 0 1))
-            (tail (substring str 1 (length str))))
-        (check-balanced-parens (cond ((string= head "(") (+ opened 1))
-                                     ((string= head ")") (- opened 1))
-                                     (t opened))
-                               tail)))))
-
 (lcr-def dante-complete (prefix)
-  (let ((imports
-         (--filter (and (s-matches? "^import[ \t]+" it)
-                        (check-balanced-parens 0 it))
-                   (s-lines (buffer-string)))))
-    (lcr-call dante-async-load-current-buffer nil nil)
-    (dolist (i imports)
-      (lcr-call dante-async-call i)) ;; the file probably won't load when trying to complete. So, load all the imports instead.
-    (let* ((reply (lcr-call dante-async-call (format ":complete repl %S" prefix)))
-           (lines (s-lines reply))
-           (common (nth 2 (read (concat "(" (car lines) ")")))))
-      (--map (concat common (read it)) (cdr lines)))))
+  (lcr-call dante-async-load-current-buffer nil nil)
+  (let* ((reply (lcr-call dante-async-call (format ":complete repl %S" prefix)))
+         (lines (s-lines reply))
+         (common (nth 2 (read (concat "(" (car lines) ")")))))
+    (--map (concat common (read it)) (cdr lines))))
 
 (defun dante--in-a-comment ()
   "Return non-nil if point is in a comment."
