@@ -646,7 +646,7 @@ If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
 Do so iff CATEGORY is enabled in variable `dante-debug'."
   (when (memq category dante-debug)
     (goto-char (1- (point-max)))
-    (insert (apply 'format msg objects))))
+    (insert (apply #'format msg objects))))
 
 (lcr-def dante-async-read ()
   "Read input from GHCi.
@@ -912,7 +912,7 @@ The command block is indicated by the >>> symbol."
                            (or (and (search-forward-regexp "[ \t]*--[ \t]*\\([ \t]>>>\\|$\\)" block-end t 1)
                                     (match-beginning 0))
                                block-end)))
-          (insert (apply 'concat (--map (concat "-- " it "\n") (--remove (s-blank? it) (s-lines res)))))
+          (insert (apply #'concat (--map (concat "-- " it "\n") (--remove (s-blank? it) (s-lines res)))))
           (beginning-of-line)
           ;; skip any non-executable comment
           (while (and (looking-at "[ \t]*--")
