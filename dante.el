@@ -441,7 +441,7 @@ Assume an number parenthesis OPENED in a prefix."
     (let* ((reply (lcr-call dante-async-call (format ":complete repl %S" prefix)))
            (lines (s-lines reply))
            (common (nth 2 (read (concat "(" (car lines) ")")))))
-      (--map (replace-regexp-in-string "\\\"" "" (concat common it)) (cdr lines)))))
+      (--map (concat common (read it)) (cdr lines)))))
 
 (defun dante--in-a-comment ()
   "Return non-nil if point is in a comment."
