@@ -145,6 +145,26 @@ to your project root, with the following contents:
 Replace ~new-impure-nix~ with the proper value, which you can figure
 out by ~M-x describe-variable <RET> dante-methods-alist~.
 
+For a multi-target project, it can be necessary to tell dante which
+[[https://cabal.readthedocs.io/en/3.4/cabal-commands.html#cabal-v2-build][target]] to pass to the ~cabal repl~ or ~stack~ command. The best method
+is to create another ~.dir-locals.el~ file in the top-level directory
+of the sources of the target in question. For instance, if a ~sil-parser-test~
+executable resides in ~stand-in-language/test/~, you can create the
+following file in that directory:
+
+#+begin_src elisp
+((nil . ((dante-target . "sil:sil-parser-test"))))
+#+end_src
+
+When using ~stack~ and a test suite, the following configuration in
+the test source directory will cause the ~--test~ flag to be passed
+when loading the files there:
+
+#+begin_src elisp
+((nil . ((dante-target . "--test"))))
+#+end_src
+
+*** More control over the configuration
 For more fine-grained configuration, check ~dante-project-root~,
 ~dante-repl-command-line~ and ~dante-load-flags~.  Use ~M-x
 customize-group dante~ to read the documentation for all customizable
