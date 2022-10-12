@@ -950,6 +950,7 @@ The command block is indicated by the >>> symbol."
           (when (funcall token-guard) ; don't try to load if we're too late.
             (let ((messages (lcr-call dante-async-load-current-buffer nil msg-fn)))
               (when nothing-done ; clears previous messages and deals with #52
+                ;; this can happen when the file did not change
                 (funcall msg-fn messages)))))))))
 
 (defun dante-pos-at-line-col (buf l c)
