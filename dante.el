@@ -13,7 +13,7 @@
 ;; Package-Commit: e2acbf6dd37818cbf479c9c3503d8a59192e34af
 ;; Created: October 2016
 ;; Keywords: haskell, tools
-;; Package-Requires: ((dash "2.12.0") (emacs "27.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.4"))
+;; Package-Requires: ((dash "2.12.0") (emacs "27.1") (f "0.19.0") (flycheck "0.30") (company "0.9") (haskell-mode "13.14") (s "1.11.0") (lcr "1.5"))
 ;; Version: 0-pre
 
 ;; This file is free software; you can redistribute it and/or modify
@@ -465,7 +465,7 @@ See ``company-backends'' for the meaning of COMMAND, ARG and _IGNORED."
                 (buffer-substring-no-properties (if is-import import-start id-start) (point)))))
     (candidates
      (unless (eq (dante-get-var 'dante-state) 'dead)
-       (cons :async (apply-partially 'dante-complete arg))))))
+       (cons :async (lambda (callback) (lcr-spawn (lcr-halt callback (lcr-call dante-complete arg)))))))))
 
 (with-eval-after-load 'company
   (add-to-list 'company-backends 'dante-company))
