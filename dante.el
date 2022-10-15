@@ -682,7 +682,7 @@ This is a standard process sentinel function."
       (if (eq (buffer-local-value 'dante-state buffer) 'deleting)
           (message "GHCi process deleted.")
         (with-current-buffer buffer (setq dante-state 'dead))
-        (dante-show-process-problem process change)))))
+        (dante-show-process-problem buffer change)))))
 
 (defun dante-diagnose ()
   "Show all state info in a help buffer."
