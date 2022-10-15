@@ -131,7 +131,7 @@ Set `dante-project-root', `dante-repl-command-line' and
 `dante-target'.  Do so according to `dante-methods' and previous
 values of the above variables."
   (unless dante-target ; Get the current package name from a nearby .cabal file
-    (setq dante-target
+    (setq-local dante-target
           (let ((cabal-file (dante-cabal-find-file)))
             (if cabal-file
                 (replace-regexp-in-string
