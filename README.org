@@ -1,29 +1,33 @@
+# -*- eval: (flyspell-mode 1); -*-
+
 * Dante: Emacs mode for Interactive Haskell
 
 [[https://gitter.im/dante-mode/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge][https://badges.gitter.im/dante-mode/Lobby.svg]]
 [[https://melpa.org/#/dante][https://melpa.org/packages/dante-badge.svg]]
 [[https://stable.melpa.org/#/dante][https://stable.melpa.org/packages/dante-badge.svg]]
 
-Dante is a fork of Intero mode which aims exclusively at providing a
-convenient frontend to GHCi. It steals good ideas from Intero,
-but it aims for light weightedness (see below for a detailed
-comparison).
+Dante provides a frontend to GHCi features: type-checking, execution,
+completion and cross referencing.
 
-** Features
+** Feature summary and cheat-sheet 
 
-| Feature                                 | Command                        | Keybinding |
-|-----------------------------------------+--------------------------------+------------|
-| On the fly type checking                | flymake-mode, or flycheck-mode |            |
-| Company completion                      | company-mode                   |            |
-| Type of selection                       | dante-type-at                  | C-c .      |
-| Info at point                           | dante-info                     | C-c ,      |
-| Apply Ghc suggestion for error at point | attrap-attrap                  | C-c /      |
-| Goto definition                         | xref-find-definitions          | M-.        |
-| Find uses                               | xref-find-references           | M-?        |
-| REPLoid (∗)                             | dante-eval-block               | C-c "      |
-| Restart                                 | dante-restart                  |            |
-| Diagnosis                               | dante-diagnose                 |            |
-| Remote operation over ssh, via tramp    | (automatic)                    |            |
+Standard Emacs tooling 
+
+| Feature                  | Command                | Keybinding |
+|--------------------------+------------------------+------------|
+| On the fly type checking | flymake-mode           |            |
+| Completion               | company-mode           |            |
+| Type in echo area        | eldoc-mode             |            |
+| Goto definition          | xref-find-definitions  | M-.        |
+| Find uses                | xref-find-references   | M-?        |
+| Remote operation         | (automatic with tramp) |            |
+| Error correction         | attrap-attrap          |            |
+|--------------------------+------------------------+------------|
+| Type of selection        | dante-type-at          | C-c .      |
+| Info at point            | dante-info             | C-c ,      |
+| REPLoid (∗)              | dante-eval-block       | C-c "      |
+| Restart                  | dante-restart          |            |
+| Diagnosis                | dante-diagnose         |            |
 
 *** (∗) REPLoid
 
@@ -62,9 +66,9 @@ can have local let statements.
 
 Any GHCi command can be put in such a block, but note however that:
 
-1. There is no guarantee that state will be maintained across several
-   calls to ~dante-eval-block~. In fact, Dante liberally calls ~:r~
-   and ~:l~, and (re)sets various GHCi options.
+1. The GHCi state will not be maintained across several calls to
+   ~dante-eval-block~. In fact, Dante liberally executes ~:r~ and
+   ~:l~, and (re)sets various GHCi options.
 
 2. It is not supported to load and/or unload modules in such blocks,
    or set unexpected options. This may work, or may mess with Dante
@@ -73,19 +77,35 @@ Any GHCi command can be put in such a block, but note however that:
 So if your goal is run your webserver/database/etc. within GHCi, you
 should not do it using dante.
 
-*** Tramp
-If programs such as ~nix-shell~ are not found on the remote host, you
-may need to ajust the tramp path. For example:
+*** Completion
+Completion works only when the current file can be loaded by GHCi
+(ie. is free of errors). So, this is not /very/ useful. To mitigate
+the problem, Dante defers type-errors to runtime when loading.
+
+*** Remote operation
+When loading a remote ([[https://www.gnu.org/software/tramp/#Overview][Tramp]]) path, GHCi will be run on the remote host,
+automatically.
+
+However, if programs such as ~nix-shell~ are not found on the remote host, you
+may need to adjust the tramp path. For example:
 #+BEGIN_SRC elisp
 (add-to-list 'tramp-remote-path 'tramp-own-remote-path)
 #+END_SRC
-*** Eldoc support
+*** Error correction
+Error correction is implemented in the sister package [[https://github.com/jyp/attrap][attrap]].
+** Installation
 
-Dante has buitin eldoc support (showing info about the symbol at point
-in the modeline when idle.) Unfortunately, at the time of writing (Oct
-2022), the standard Haskell mode uses the old eldoc API, overriding
-Dante's eldoc support. I recommend just disabling the standard Haskell
-mode eldoc support, which IMO isn't very helpful anyway, like so:
+Dante can be installed by any usual means. (Use-package is a pretty popular option)
+
+** Configuration
+*** Eldoc
+
+Dante has builtin [[https://www.emacswiki.org/emacs/ElDoc][Eldoc]] support (showing info about the symbol at
+point in the echo area when idle.) Unfortunately, at the time of
+writing (Oct 2022), the standard Haskell mode uses the old eldoc API,
+overriding Dante's Eldoc support. I recommend just disabling the
+standard Haskell mode Eldoc support, which IMO isn't very helpful
+anyway, like so:
 
 #+begin_src elisp
   (add-hook 'haskell-mode-hook
@@ -93,50 +113,29 @@ mode eldoc support, which IMO isn't very helpful anyway, like so:
               (setq eldoc-documentation-strategy #'eldoc-documentation-default)))
 #+end_src
 
-
-** Installation
-
-Turn on Dante in your ~haskell-mode-hook~. I recommend:
-
-#+BEGIN_SRC elisp
-  (use-package dante
-    :ensure t
-    :after haskell-mode
-    :commands 'dante-mode
-    :init
-    (add-hook 'haskell-mode-hook 'flycheck-mode)
-    ;; OR for flymake support:
-    (add-hook 'haskell-mode-hook 'flymake-mode)
-    (remove-hook 'flymake-diagnostic-functions 'flymake-proc-legacy-flymake)
-
-    (add-hook 'haskell-mode-hook 'dante-mode)
-    )
-#+END_SRC
-
-
-If you want to see type of whatever is under the cursor at the moment
-as you move the cursor around, live, you can set `dante-tap-type-time`
-variable to number of seconds after which type information will appear
-in the minibuffer.
-
-
-*** Using dante + hlint
+*** Using Dante + hlint
 
 You can activate the hlint checker in addition to the dante checker by
-calling ~flycheck-add-next-checker~ appropriately, for example by
-adding a ~config~ section in the ~use-package dante~ call:
+calling ~flycheck-add-next-checker~ appropriately (For example by
+adding a ~config~ section in the ~use-package dante~ call.)
 
 #+BEGIN_SRC elisp
-  :config
   (flycheck-add-next-checker 'haskell-dante '(info . haskell-hlint))
 #+END_SRC
 
-** Configuration
+*** Configuring the GHCi loading method
 Configuration can be important to make sure that GHCi is properly
 loaded by dante.  Even though Dante will do its best to figure out the
-proper way to load GHCi for your project, it may still fail. A typical
-way to configure GHCi command line is to a add a ~.dir-locals.el~ file
-to your project root, with the following contents:
+proper way to load GHCi for your project, it may still fail.  You can
+guide Dante's behavior by customizing variables. Note in particular
+that customization can be done on a per-file, per-package or
+per-project basis by using [[https://www.gnu.org/software/emacs/manual/html_node/emacs/File-Variables.html#File-Variables][file-]] and [[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory-local]] variables (as
+recommended above).
+
+In fact typical way to configure GHCi command line is to a add a
+~.dir-locals.el~ file to your project root which sets the loading
+method. The loading method is a recipe to find out the root of the
+project and the command line to use to start GHCi.
 
 #+BEGIN_SRC elisp
 ((nil . ((dante-methods . (new-impure-nix)))))
@@ -144,6 +143,8 @@ to your project root, with the following contents:
 
 Replace ~new-impure-nix~ with the proper value, which you can figure
 out by ~M-x describe-variable <RET> dante-methods-alist~.
+
+*** Configuring the Cabal target
 
 For a multi-target project, it can be necessary to tell dante which
 [[https://cabal.readthedocs.io/en/3.4/cabal-commands.html#cabal-v2-build][target]] to pass to the ~cabal repl~ or ~stack~ command. The best method
@@ -164,36 +165,41 @@ when loading the files there:
 ((nil . ((dante-target . "--test"))))
 #+end_src
 
-*** More control over the configuration
-For more fine-grained configuration, check ~dante-project-root~,
-~dante-repl-command-line~ and ~dante-load-flags~.  Use ~M-x
-customize-group dante~ to read the documentation for all customizable
-variables. Note in particular that customization can be done on a
-per-file, per-package or per-project basis by using [[https://www.gnu.org/software/emacs/manual/html_node/emacs/File-Variables.html#File-Variables][file-]] and
-[[https://www.gnu.org/software/emacs/manual/html_node/emacs/Directory-Variables.html][directory-local]] variables (as recommended above).
+*** More control over the GHCi command line
+For more direct control over the command line, you can set
+~dante-repl-command-line~ directly. If Dante additionally fails to
+find the project root using any of the ~dante-methods~, configure
+~dante-project-root~ explicitly.  (Do it using ~dir-locals.el~.)
 
-** Comparison with Intero
+*** Example full configuration
 
-To the best of my knowledge, Intero is no longer maintained. For
-posterity, here is how Dante compares with Intero:
+#+BEGIN_SRC elisp
+  (use-package dante
+    :ensure t ; ask use-package to install the package
+    :after haskell-mode
+    :commands 'dante-mode
+    :init
+    ;; flycheck backend deprecated October 2022
+    ;; (add-hook 'haskell-mode-hook 'flycheck-mode)
+    (add-hook 'haskell-mode-hook 'flymake-mode)
+    (remove-hook 'flymake-diagnostic-functions 'flymake-proc-legacy-flymake)
+    (add-hook 'haskell-mode-hook 'dante-mode)
+    (add-hook 'haskell-mode-hook
+              (defun my-fix-hs-eldoc ()
+                (setq eldoc-documentation-strategy #'eldoc-documentation-default)))
+    :config
+    (flycheck-add-next-checker 'haskell-dante '(info . haskell-hlint)))
+#+END_SRC
 
-- Dante has no dependency on "Stack"
-- Dante's Emacs code is about half as long as that of Intero.
-- Dante does not depend on custom Haskell code, contrary to
-  Intero. Thus, it will work if (and only if) GHCi works for your
-  project. (Including via "Stack".)
-- Dante supports  ~xref-find-definitions~ and ~xref-find-references~.
-- Dante has native eldoc support (Emacs 28)
-- With Dante, on-the-fly checking is optional (yet recommended), whereas
-  Intero demands that you flycheck your code.
-- Dante has a different approach to Haskell evaluation
-- Dante offers no support for Hoogle.
 ** Troubleshooting
 
 If ~dante-type-at~ gives ~Couldn't guess that module name. Does it
 exist?~ or ~xref-find-definitions~ gives ~No definitions found for:
 "/tmp/danteTqJJvj.hs" ~, you may need to add your targets to
 ~.dir-locals.el~; see the Configuration section above.
+
+Finally, Use ~M-x customize-group dante~ to read the documentation for
+all customizable variables.
 
 ** In the "press"
 - [[http://h2.jaguarpaw.co.uk/posts/how-i-use-dante/][How I use dante]]
