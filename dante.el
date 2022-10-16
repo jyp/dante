@@ -236,6 +236,7 @@ if the argument is omitted or nil or a positive integer).
 (define-key dante-mode-map (kbd "C-c ,") 'dante-info)
 (define-key dante-mode-map (kbd "C-c /") 'attrap-attrap) ;; deprecated keybinding
 (define-key dante-mode-map (kbd "C-c \"") 'dante-eval-block)
+(define-key dante-mode-map (kbd "C-c C-c") 'dante-exec)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Interactive utils
@@ -870,6 +871,15 @@ The command block is indicated by the >>> symbol."
           (while (and (looking-at "[ \t]*--")
                       (not (looking-at "[ \t]*--[ \t]+>>>")))
             (forward-line)))))))
+
+(defcustom dante-exec-default "main"
+  (substitute-command-keys "Default command to run by `dante-exec'.")
+  :group 'dante :safe t :type 'string)
+
+(defun dante-exec (command)
+  "Execute COMMAND in GHCi and show the result in the echo area."
+  (interactive (list dante-exec-default))
+  (lcr-spawn (message "%s" (lcr-call dante-async-call command))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flymake
