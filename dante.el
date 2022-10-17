@@ -166,9 +166,9 @@ automatically.  The user will have to manually run `dante-restart'
 to destroy the buffer and create a fresh one without this variable enabled.
 - other value: informative value for the user about what GHCi is doing.")
 
-(defun dante-get-var (symbol)
+(defmacro dante-get-var (var)
   "Return the value of SYMBOL in the GHCi process buffer."
-  (let ((bp (dante-buffer-p))) (when bp (buffer-local-value symbol bp))))
+  `(when-let ((bp (dante-buffer-p))) (buffer-local-value ',var bp)))
 
 (add-hook
  'lcr-context-switch-hook
@@ -341,7 +341,7 @@ and over."
 
 (defun dante-check (checker cont)
   "Run a check with CHECKER and pass the status onto CONT."
-  (if (eq (dante-get-var 'dante-state) 'dead) (funcall cont 'interrupted)
+  (if (eq (dante-get-var dante-state) 'dead) (funcall cont 'interrupted)
     (lcr-spawn
       (let* ((messages (lcr-call dante-async-load-current-buffer nil nil))
              (temp-file (dante-local-name (dante-temp-file-name (current-buffer)))))
@@ -429,7 +429,7 @@ See ``company-backends'' for the meaning of COMMAND, ARG and _IGNORED."
                      (is-import (eq import-end id-start)))
                 (buffer-substring-no-properties (if is-import import-start id-start) (point)))))
     (candidates
-     (unless (eq (dante-get-var 'dante-state) 'dead)
+     (unless (eq (dante-get-var dante-state) 'dead)
        (cons :async (lambda (callback) (lcr-spawn (lcr-halt callback (lcr-call dante-complete arg)))))))))
 
 (with-eval-after-load 'company
@@ -785,7 +785,7 @@ Search upwards in the directory structure, starting from FILE (or
           (col (string-to-number (match-string 3 string))))
       (xref-make-file-location
        (or (gethash file dante-original-buffer-map)
-           (expand-file-name file dante-ghci-path))
+           (expand-file-name file (dante-get-var dante-ghci-path)))
        line (1- col)))))
 
 (defun dante--summarize-src-spans (spans file)
@@ -899,7 +899,7 @@ The command block is indicated by the >>> symbol."
          ;; got another call from flymake in between.
          (local-token (if buf0 (with-current-buffer buf0 (setq dante-flymake-token (1+ dante-flymake-token)))
                         dante-flymake-token)))
-    (if (eq (dante-get-var 'dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
+    (if (eq (dante-get-var dante-state) 'dead) (funcall report-fn :panic :explanation "Ghci is dead")
       (lcr-spawn
         (let* ((buf (lcr-call dante-session)) ; yield until GHCi is ready to process the request
                (token-guard (lambda () (eq (buffer-local-value 'dante-flymake-token buf) local-token)))
