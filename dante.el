@@ -697,7 +697,7 @@ This is a standard process sentinel function."
   (if buffer
       (with-current-buffer buffer
         (s-join "\n" (--map (format "%s %S" it (eval it))
-                            '(default-directory dante-command-line dante-state dante-queue dante-loaded-file dante-load-message lcr-process-callback))))
+                            '(default-directory dante-ghci-path dante-command-line dante-state dante-queue dante-loaded-file dante-load-message lcr-process-callback))))
     "No GHCi interaction buffer"))
 
 (defun dante-show-process-problem (buf change)
