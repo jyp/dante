@@ -7,29 +7,28 @@
 [[https://stable.melpa.org/#/dante][https://stable.melpa.org/packages/dante-badge.svg]]
 
 Dante provides a frontend to GHCi features: type-checking, execution,
-completion and cross referencing.
+completion and cross referencing. It integrates with standard Emacs
+tooling as much as possible.
 
 ** Feature summary and cheat-sheet 
 
-Standard Emacs tooling 
+| Feature                  | Mode/Command            | Keybinding |
+|--------------------------+-------------------------+------------|
+| On the fly type checking | ~flymake-mode~          |            |
+| Completion               | ~company-mode~          |            |
+| Type in echo area        | ~eldoc-mode~            |            |
+| Goto definition          | ~xref-find-definitions~ | M-.        |
+| Find uses                | ~xref-find-references~  | M-?        |
+| Remote operation         | (automatic with tramp)  |            |
+| Error correction         | ~attrap-attrap~         |            |
+|--------------------------+-------------------------+------------|
+| Type of selection        | ~dante-type-at~         | C-c .      |
+| Info at point            | ~dante-info~            | C-c ,      |
+| REPLoid                  | ~dante-eval-block~      | C-c "      |
+| Restart                  | ~dante-restart~         |            |
+| Diagnosis                | ~dante-diagnose~        |            |
 
-| Feature                  | Command                | Keybinding |
-|--------------------------+------------------------+------------|
-| On the fly type checking | flymake-mode           |            |
-| Completion               | company-mode           |            |
-| Type in echo area        | eldoc-mode             |            |
-| Goto definition          | xref-find-definitions  | M-.        |
-| Find uses                | xref-find-references   | M-?        |
-| Remote operation         | (automatic with tramp) |            |
-| Error correction         | attrap-attrap          |            |
-|--------------------------+------------------------+------------|
-| Type of selection        | dante-type-at          | C-c .      |
-| Info at point            | dante-info             | C-c ,      |
-| REPLoid (∗)              | dante-eval-block       | C-c "      |
-| Restart                  | dante-restart          |            |
-| Diagnosis                | dante-diagnose         |            |
-
-*** (∗) REPLoid
+*** REPLoid
 
 You can evaluate code by writing it in a comment of the form
 ~-- >>>~ and run ~dante-eval-block~.
@@ -93,6 +92,15 @@ may need to adjust the tramp path. For example:
 #+END_SRC
 *** Error correction
 Error correction is implemented in the sister package [[https://github.com/jyp/attrap][attrap]].
+
+*** Using ~hlint~
+
+Dante is a GHCi interaction mode. Therefore it does not provide any
+support for hlint. However, you can use a third party support for
+hlint in addition to Dante. In fact [[https://github.com/jyp/attrap][attrap]] even provides support for
+interactive application of hints. See that package documentation for
+configuration.
+
 ** Installation
 
 Dante can be installed by any usual means. (Use-package is a pretty popular option)
@@ -112,16 +120,6 @@ anyway, like so:
             (defun my-fix-hs-eldoc ()
               (setq eldoc-documentation-strategy #'eldoc-documentation-default)))
 #+end_src
-
-*** Using Dante + hlint
-
-You can activate the hlint checker in addition to the dante checker by
-calling ~flycheck-add-next-checker~ appropriately (For example by
-adding a ~config~ section in the ~use-package dante~ call.)
-
-#+BEGIN_SRC elisp
-  (flycheck-add-next-checker 'haskell-dante '(info . haskell-hlint))
-#+END_SRC
 
 *** Configuring the GHCi loading method
 Configuration can be important to make sure that GHCi is properly
@@ -181,6 +179,7 @@ find the project root using any of the ~dante-methods~, configure
     :init
     ;; flycheck backend deprecated October 2022
     ;; (add-hook 'haskell-mode-hook 'flycheck-mode)
+
     (add-hook 'haskell-mode-hook 'flymake-mode)
     (remove-hook 'flymake-diagnostic-functions 'flymake-proc-legacy-flymake)
     (add-hook 'haskell-mode-hook 'dante-mode)
@@ -188,7 +187,12 @@ find the project root using any of the ~dante-methods~, configure
               (defun my-fix-hs-eldoc ()
                 (setq eldoc-documentation-strategy #'eldoc-documentation-default)))
     :config
-    (flycheck-add-next-checker 'haskell-dante '(info . haskell-hlint)))
+    (require 'flymake-flycheck)
+    (defalias 'flymake-hlint
+      (flymake-flycheck-diagnostic-function-for 'haskell-hlint))
+    (add-to-list 'flymake-diagnostic-functions 'flymake-hlint)
+    ;; flycheck backend deprecated October 2022
+    ;; (flycheck-add-next-checker 'haskell-dante '(info . haskell-hlint)))
 #+END_SRC
 
 ** Troubleshooting
