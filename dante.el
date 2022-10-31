@@ -878,8 +878,13 @@ The command block is indicated by the >>> symbol."
 
 (defun dante-exec (command)
   "Execute COMMAND in GHCi and show the result in the echo area."
-  (interactive (list dante-exec-default))
-  (lcr-spawn (message "%s" (lcr-call dante-async-call command))))
+  (interactive (list (if (region-active-p)
+                         (buffer-substring-no-properties (region-beginning) (region-end))
+                       dante-exec-default)))
+  (dante-set-state 'running)
+  (lcr-spawn
+    (lcr-call dante-async-load-current-buffer nil nil)
+    (message "%s" (lcr-call dante-async-call command))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Flymake
