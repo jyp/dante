@@ -854,7 +854,8 @@ The command block is indicated by the >>> symbol."
       (lcr-call dante-async-load-current-buffer t nil)
       (while (search-forward-regexp "[ \t]*--[ \t]+>>>" (line-end-position) t 1)
         ;; found a command; execute it and replace the result.
-        (let ((res (lcr-call dante-async-call (buffer-substring-no-properties (point) (line-end-position)))))
+        (let* ((cmd (buffer-substring-no-properties (point) (line-end-position))) 
+               (res (lcr-call dante-async-call cmd)))
           (beginning-of-line)
           (forward-line)
           (save-excursion
