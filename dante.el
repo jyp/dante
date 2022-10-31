@@ -325,6 +325,7 @@ and over."
       ;; GHCi will interpret the buffer if both -fbyte-code and :l * are used.
       (lcr-call dante-async-call (if interpret ":set -fbyte-code" ":set -fobject-code"))
       (with-current-buffer buffer
+        (setq-local dante-status 'loading)
         (dante-async-write (if same-target ":r!"
                              (concat ":l! " (if interpret "*" "") (dante-local-name fname))))
         (cl-destructuring-bind (_status err-messages _loaded-modules)
@@ -632,13 +633,14 @@ ACC umulate input and ERR-MSGS."
                   "^Ok, one module loaded."))
         (progress "^\\[\\([0-9]*\\) of \\([0-9]*\\)\\] Compiling \\([^ \n]*\\).*")
         (err-regexp "^\\([A-Z]?:?[^ \n:][^:\n\r]+\\):\\([0-9()-:]+\\): \\(.*\\)\n\\(\\([ ]+.*\n\\)*\\)")
-        (result nil))
+        result cur-file)
     (while (not result)
       (let* ((i (string-match (dante-regexp-disjoin dante-ghci-prompt success err-regexp progress) acc))
              (m (when i (match-string 0 acc)))
              (rest (when i (substring acc (match-end 0)))))
         (cond ((and m (string-match dante-ghci-prompt m))
-               (setq dante-state (list 'ghc-err dante-state))
+               (setq dante-state (list 'ghc-err (pcase dante-state (`(compiling ,module) module)
+                                                       (_ cur-file)))) ; when the module name is wrong, ghc does not output any "Compiling ..." message
                (setq result (list 'failed (nreverse err-msgs) (match-string 1 m))))
               ((and m (string-match progress m))
                (setq dante-state (list 'compiling (match-string 3 m))))
@@ -652,6 +654,7 @@ ACC umulate input and ERR-MSGS."
                  (setq result (list 'ok (or (nreverse err-msgs) warning-msgs) loaded-mods))))
               ((and m (> (length rest) 0) (/= (elt rest 0) ? )) ;; make sure we're matching a full error message
                (let ((err-msg (-take 4 (cdr (s-match err-regexp m)))))
+                 (setq cur-file (car err-msg))
                  (push err-msg err-msgs)
                  (when err-fn (funcall err-fn (list err-msg)))))
               (t (setq rest (concat acc (lcr-call dante-async-read)))))
