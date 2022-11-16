@@ -356,7 +356,7 @@ process."
   :start 'dante-check
   :predicate (lambda () dante-mode)
   :modes '(haskell-mode haskell-literate-mode)
-  :working-directory (lambda (_checker) dante-ghci-path))
+  :working-directory (lambda (_checker) dante-project-root)) ; dante-ghci-path is where cabal runs. But it's not initialised at the moment the function is called. 
 
 (add-to-list 'flycheck-checkers 'haskell-dante)
 
