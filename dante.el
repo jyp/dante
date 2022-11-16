@@ -942,6 +942,7 @@ Or nil if BUFFER / TEMP-FILE are not relevant to the message."
     ;; Flymake bug: in fact, we would want to report all errors,
     ;; with buffer = (if (string= temp-file file) buffer (find-buffer-visiting file)),
     ;; but flymake actually ignores the buffer argument of flymake-make-diagnostic (?!).
+    ;; Note: GHCi messages are relative to dante-ghci-path, which is not necessarily the current path. This should be taken into account too.
     (when (string= temp-file file)
       (let* ((type-analysis
               (cl-destructuring-bind (typ msg-start) (s-split-up-to ":" first-line 1)
