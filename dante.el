@@ -748,7 +748,9 @@ Process state change: " change "
   "Name of the GHCi interaction buffer.
 First, if needed, initialize the GHCi invokation method.  Then construct the
 appropriate buffer name on this basis."
-  (unless dante-project-root (dante-initialize-method))
+  (unless (and dante-project-root
+               dante-command-line)
+    (dante-initialize-method))
   (concat "*dante:" dante-target ":" dante-project-root "*"))
 
 (defun dante-buffer-p ()
