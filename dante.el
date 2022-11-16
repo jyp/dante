@@ -356,7 +356,7 @@ process."
   :start 'dante-check
   :predicate (lambda () dante-mode)
   :modes '(haskell-mode haskell-literate-mode)
-  :working-directory (lambda (_checker) dante-project-root)) ; dante-ghci-path is where cabal runs. But it's not initialised at the moment the function is called. 
+  :working-directory (lambda (_checker) dante-project-root)) ; dante-ghci-path is where cabal runs. But it's not initialised at the moment the function is called.  it should be possible to make the path absolute by using dante-ghci-path at the time that the error message is produced. Probably in `dante-fly-message`.
 
 (add-to-list 'flycheck-checkers 'haskell-dante)
 
