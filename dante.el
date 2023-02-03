@@ -108,7 +108,7 @@ will be in loaded in different GHCi sessions."
     (impure-nix dante-cabal-nix ("nix-shell" "--run" (concat "cabal v1-repl " dante-target " --builddir=dist/dante")))
     (new-build "cabal.project.local" ("cabal" "new-repl" dante-target "--builddir=dist/dante"))
     (nix-ghci ,(lambda (d) (directory-files d t "shell.nix\\|default.nix")) ("nix-shell" "--pure" "--run" "ghci"))
-    (stack "stack.yaml" ("stack" "repl" dante-target))
+    (stack "stack.yaml" ("stack" "repl" "--no-terminal" dante-target))
     (mafia "mafia" ("mafia" "repl" dante-target))
     (bare-cabal ,(lambda (d) (directory-files d t "..cabal$")) ("cabal" "v2-repl" dante-target "--builddir=newdist/dante"))
     (bare-v1-cabal ,(lambda (d) (directory-files d t "..cabal$")) ("cabal" "v1-repl" dante-target "--builddir=dist/dante"))
