@@ -361,7 +361,7 @@ process."
 (add-to-list 'flycheck-checkers 'haskell-dante)
 
 (defcustom dante-flycheck-types
-  '(("^warning: \\[-W\\(typed-holes\\|deferred-\\(type-errors\\|out-of-scope-variables\\)\\)\\]" . error)
+  '(("^warning:\\(?: \\[GHC-[0-9]+\\]\\)? \\[-W\\(?:typed-holes\\|deferred-\\(?:type-errors\\|out-of-scope-variables\\)\\)\\]" . error)
     ("^warning" . warning)
     ("^splicing " . nil)
     ("" . error))
