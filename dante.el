@@ -954,8 +954,11 @@ Or nil if BUFFER / TEMP-FILE are not relevant to the message."
                       (t (list :error msg-start)))))
              (location (dante-parse-error-location location-raw))
              (r (pcase location
-                  (`(,l1 ,c1 ,l2 ,c2) (cons (dante-pos-at-line-col buffer l1 c1) (dante-pos-at-line-col buffer (or l2 l1) (1+ c2))))
-                  (`(,l ,c) (flymake-diag-region buffer l c)))))
+                  (`(,l1 ,c1 ,l2 ,c2) (cons (dante-pos-at-line-col buffer l1 c1)
+                                            (dante-pos-at-line-col buffer (or l2 l1) (1+ c2))))
+                  (`(,l ,c)
+                   (let ((p (dante-pos-at-line-col buffer l c)))
+                     (cons  p (1+ p))))))) ;; flymake-diag-region barfs on tabs
         (when r
           (cl-destructuring-bind (type msg-first-line) type-analysis
             (let* ((final-msg (s-trim (concat msg-first-line "\n" (replace-regexp-in-string "^    " "" msg)))))
