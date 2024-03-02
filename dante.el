@@ -71,6 +71,15 @@ shell."
   :group 'dante
   :type '(repeat sexp))
 
+(defcustom dante-environment-variables nil
+  "Variables which are set when `dante-repl-command-line` is run
+
+   A list of variable settings of the form (VAR VALUE),
+   where VAR is the name of the variable (a string) and VALUE
+   is its value (also a string)."
+  :group 'dante
+  :type '(repeat (cons string string)))
+
 (defcustom dante-project-root nil
   "The project root, as a string or nil.
 When nil, dante will guess the value by looking for a cabal file.
@@ -589,9 +598,12 @@ If WAIT is nil, abort if Dante is busy.  Pass the dante buffer to CONT"
   "Start a GHCi process and return its buffer."
   (let* ((buffer (dante-buffer-create))
          (args (-non-nil (-map #'eval dante-repl-command-line)))
+         (process-environment (copy-sequence process-environment))
          (process (with-current-buffer buffer
                     (message "Dante: Starting GHCi: %s" (combine-and-quote-strings args))
-                    (apply #'start-file-process "dante" buffer args))))
+                    (mapcar (lambda (elem) (setenv (car elem) (cadr elem)))
+			      dante-environment-variables)
+		    (apply #'start-file-process "dante" buffer args))))
     (set-process-query-on-exit-flag process nil)
     (with-current-buffer buffer
       (erase-buffer)
